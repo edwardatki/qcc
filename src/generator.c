@@ -65,7 +65,8 @@ static void visitAll(NodeListEntry* listRoot, int depth) {
     NodeListEntry* curEntry = listRoot;
     while (curEntry->next != NULL) {
         curEntry = curEntry->next;
-        visit(curEntry->node, depth);
+        Register* reg = visit(curEntry->node, depth);
+        freeReg(reg);   // Free registers that were allocated but never used for anything :(
     }
 }
 
@@ -187,6 +188,39 @@ static void visitReturn(Node* node, int depth) {
     if (strcmp(reg->name, "a") != 0) outputPointer += sprintf(outputPointer, "\tmov a, %s\n", reg->name);
 
     outputPointer += sprintf(outputPointer, "\tret\n");
+    freeReg(reg);
+}
+
+static void visitIf(Node* node, int depth) {
+    printIndent(depth);
+    printf("If\n");
+
+    // Get test value
+    Register* reg = visit(node->Return.expr, depth+1);
+
+    // Push accumulator if necessary
+    if ((strcmp(reg->name, "a") != 0) && (!registers[0].free)) outputPointer += sprintf(outputPointer, "\tpush a\n");
+
+    // Move test value to accumulator if necessary
+    if (strcmp(reg->name, "a") != 0) outputPointer += sprintf(outputPointer, "\tmov a, %s\n", reg->name);
+
+    // Compare and jump if equal 0
+    outputPointer += sprintf(outputPointer, "\tcmp 0\n");
+    outputPointer += sprintf(outputPointer, "\tje .false_%d\n", 0); // TODO unique labels
+    freeReg(reg);
+
+    // Visit true branch
+    visit(node->If.true_statement, depth+1);
+    outputPointer += sprintf(outputPointer, "\tjmp .exit_%d\n", 0);
+
+    // Visit false branch
+    outputPointer += sprintf(outputPointer, ".false_%d:\n", 0);
+    visit(node->If.false_statement, depth+1);
+
+    outputPointer += sprintf(outputPointer, ".exit_%d:\n", 0);
+    
+    // Restore accumulator if necessary
+    if ((strcmp(reg->name, "a") != 0) && (!registers[0].free)) outputPointer += sprintf(outputPointer, "\tpop a\n");
 }
 
 static Register* visit(Node* node, int depth) {
@@ -211,6 +245,9 @@ static Register* visit(Node* node, int depth) {
             return visitBinop(node, depth);
         case N_RETURN:
             visitReturn(node, depth);
+            return NULL;
+        case N_IF:
+            visitIf(node, depth);
             return NULL;
     }
 

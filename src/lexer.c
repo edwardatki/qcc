@@ -70,6 +70,8 @@ static void checkKeyword(FILE* fp, char c) {
     }
 
     if (strcmp(value, "return") == 0) addToken(T_RETURN, value);
+    else if (strcmp(value, "if") == 0) addToken(T_IF, value);
+    else if (strcmp(value, "else") == 0) addToken(T_ELSE, value);
     else addToken(T_ID, value);
 }
 

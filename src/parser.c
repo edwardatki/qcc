@@ -3,6 +3,9 @@
 
 static Token* curToken;
 
+static Node* block();
+static Node* statement();
+
 static int peek(enum TokenType type) {
     return curToken->type == type;
 }
@@ -23,7 +26,7 @@ static void eat() {
 
 static void eatType(enum TokenType type) {
     if (curToken->type != type) {
-        char* messages[] = {"EOF", "'('", "')'", "'{'", "'}'", "','" "','", "'+'", "'-'", "'*'", "'/'", "'='", "a literal", "'return'", "an identifier", "a type", "';'"};
+        char* messages[] = {"EOF", "'('", "')'", "'{'", "'}'", "','" "','", "'+'", "'-'", "'*'", "'/'", "'='", "a literal", "keyword 'return'", "an identifier", "a type", "';'", "keyword 'if'", "keyword 'else'"};
         printf("%d:%d %serror:%s expected %s but got %s\n", curToken->line, curToken->column, RED, RESET, messages[type], messages[curToken->type]);
         exit(EXIT_FAILURE);
     }
@@ -151,15 +154,39 @@ static Node* return_statement() {
     return node;
 }
 
-static Node* block();
+// return_statement : IF LPAREN expr RPAREN statement (ELSE statement)?
+static Node* if_statement() {
+    Token* token = curToken;
+    eatType(T_IF);
 
-// statement : (return_statement SEMICOLON) | (block) | (expr SEMICOLON)
+    Node* node = newNode(token, N_IF);
+
+    eatType(T_LPAREN);
+    node->If.expr = expr();
+    eatType(T_RPAREN);
+
+    node->If.true_statement = statement();
+
+    if (peek(T_ELSE)) {
+        eat();
+        node->If.false_statement = statement();
+    }
+    else {
+        node->If.false_statement = NULL;
+    }
+
+    return node;
+}
+
+// statement : (return_statement SEMICOLON) | (if_statement) | (block) | (expr SEMICOLON)
 static Node* statement() {
     Node* node;
 
     if (peek(T_RETURN)) {
         node = return_statement();
         eatType(T_SEMICOLON);
+    } else if (peek(T_IF)) {
+        node = if_statement();
     } else if (peek(T_LBRACE)) {
         node = block();
     } else {

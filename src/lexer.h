@@ -6,7 +6,7 @@
 #include <ctype.h>
 #include <string.h>
 
-enum TokenType {T_END=0, T_LPAREN, T_RPAREN, T_LBRACE, T_RBRACE, T_COMMA, T_PLUS, T_MINUS, T_MUL, T_DIV, T_ASSIGN, T_NUMBER, T_RETURN, T_ID, T_TYPE, T_SEMICOLON};
+enum TokenType {T_END=0, T_LPAREN, T_RPAREN, T_LBRACE, T_RBRACE, T_COMMA, T_PLUS, T_MINUS, T_MUL, T_DIV, T_ASSIGN, T_NUMBER, T_RETURN, T_ID, T_TYPE, T_SEMICOLON, T_IF, T_ELSE};
 
 typedef struct Token Token;
 struct Token {

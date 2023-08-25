@@ -8,7 +8,7 @@
 #include "symbol.h"
 #include "scope.h"
 
-enum NodeType {N_TYPE, N_VAR_DECL, N_FUNC_DECL, N_BLOCK, N_VARIABLE, N_NUMBER, N_ASSIGNMENT, N_BINOP, N_RETURN};
+enum NodeType {N_TYPE, N_VAR_DECL, N_FUNC_DECL, N_BLOCK, N_VARIABLE, N_NUMBER, N_ASSIGNMENT, N_BINOP, N_RETURN, N_IF};
 
 struct NodeListEntry;
 typedef struct NodeListEntry NodeListEntry;
@@ -45,6 +45,11 @@ struct Node {
         struct {
             Node* expr;
         } Return;
+        struct {
+            Node* expr;
+            Node* true_statement;
+            Node* false_statement;
+        } If;
     };
 };
 

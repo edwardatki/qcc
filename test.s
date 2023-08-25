@@ -2,15 +2,11 @@ char main () {
     char test;
     test = 1;
 
-    {
-        char test;
-        test = 2;
+    if (test) {
+        return 27;
+    } else {
+        test = test + 1;
     }
 
-    {
-        char test;
-        test = 3;
-    }
-
-    return test;
+    return 0;
 }
