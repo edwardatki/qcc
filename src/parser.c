@@ -1,4 +1,5 @@
 #include "parser.h"
+#include "print_formatting.h"
 
 static Token* curToken;
 
@@ -19,9 +20,11 @@ static void eat() {
     curToken = curToken->next;
 }
 
+
 static void eatType(enum TokenType type) {
     if (curToken->type != type) {
-        printf("Expected %d but got %d: %s\n", type, curToken->type, curToken->value);
+        char* messages[] = {"EOF", "'('", "')'", "'{'", "'}'", "','" "','", "'+'", "'-'", "'*'", "'/'", "'='", "a literal", "'return'", "an identifier", "a type", "';'"};
+        printf("%d:%d %serror:%s expected %s but got %s\n", curToken->line, curToken->column, RED, RESET, messages[type], messages[curToken->type]);
         exit(EXIT_FAILURE);
     }
     eat();
@@ -35,23 +38,24 @@ static Type* getSymbolType(Token* token) {
     return NULL;
 }
 
-static void addNodeListEntry(NodeListEntry** listRoot, Node* entryNode) {
-    if (*listRoot == NULL) {
-        *listRoot = calloc(1, sizeof(NodeListEntry));
+static void addNodeListEntry(NodeListEntry** rootEntry, Node* entryNode) {
+    if (*rootEntry == NULL) {
+        *rootEntry = calloc(1, sizeof(NodeListEntry));
     }
 
-    NodeListEntry* curEntry = *listRoot;
+    NodeListEntry* curEntry = *rootEntry;
+
+    *rootEntry = curEntry;
  
     // Travel to end of list
-    // printf("%p\n", curEntry);
     while (curEntry->next != NULL) {
         curEntry = curEntry->next;
-        // printf("%p\n", curEntry);
     }
 
     // Create new entry
     NodeListEntry* newEntry = calloc(1, sizeof(NodeListEntry));
     newEntry->node = entryNode;
+    newEntry->next = NULL;
     curEntry->next = newEntry;
 }
 
@@ -66,9 +70,10 @@ static Node* expr();
 
 // assignment : variable ASSIGN expr
 static Node* assignment () {
+    // Lookup symbol from current scope
     Node* variableNode = newNode(curToken, N_VARIABLE);
-    // TODO lookup symbol
-    variableNode->Variable.symbol = NULL;
+    variableNode->Variable.symbol = lookupSymbol(curToken);
+
     Token* token = curToken;
     eat(T_ID);
     eat(T_ASSIGN);
@@ -88,9 +93,11 @@ static Node* factor () {
         if (peek2(T_ASSIGN)) {
             return assignment();
         } else {
-            Node* node = newNode(curToken, N_VARIABLE);
+            // Lookup symbol from current scope
+            Node* variableNode = newNode(curToken, N_VARIABLE);
+            variableNode->Variable.symbol = lookupSymbol(curToken);
             eat(T_ID);
-            return node;
+            return variableNode;
         }
     }
 
@@ -121,8 +128,9 @@ Node* additive_expr () {
     while (peek(T_PLUS) || peek(T_MINUS)) {
         Token* token = curToken;
         eat();
+        Node* oldNode = node;
         node = newNode(token, N_BINOP);
-        node->BinOp.left = termNode;
+        node->BinOp.left = oldNode;
         node->BinOp.right = term();
     }
 
@@ -173,10 +181,14 @@ static Type* type() {
 static Node* var_decl() {
     Type* symbolType = type();
     Node* node = newNode(curToken, N_VAR_DECL);
+
     Symbol* symbol = calloc(1, sizeof(Symbol));
     symbol->token = curToken;
     symbol->type = symbolType;
-    symbol->memoryLocation = "???";
+    symbol->location = "???";
+
+    scopeAddSymbol(symbol);
+
     node->VarDecl.symbol = symbol;
     eatType(T_ID);
     return node;
@@ -184,6 +196,8 @@ static Node* var_decl() {
 
 // block : LBRACE (statement | var_decl SEMICOLON)* RBRACE
 static Node* block() {
+    enterNewScope();
+
     Node* node = newNode(curToken, N_BLOCK);
     eatType(T_LBRACE);
     while (!peek(T_RBRACE)) {
@@ -197,11 +211,15 @@ static Node* block() {
     }
     eatType(T_RBRACE);
 
+    exitScope();
+
     return node;
 }
 
 // function_decl : type ID LPAREN (FORMAL_PARAMETERS)? RPAREN block
 static Node* function_decl() {
+    enterNewScope();
+
     Type* symbolType = type();
     Node* node = newNode(curToken, N_FUNC_DECL);
     eatType(T_ID);
@@ -220,13 +238,20 @@ static Node* function_decl() {
     node->FunctionDecl.returnType = symbolType;
     node->FunctionDecl.block = block();
 
+    exitScope();
+
     return node;
 }
 
 Node* parse(Token* firstToken) {
     curToken = firstToken;
 
+    // Global scope
+    enterNewScope();
+
     Node* rootNode = function_decl();
+
+    exitScope();
 
     return rootNode;
 }

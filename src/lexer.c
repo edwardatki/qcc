@@ -1,6 +1,10 @@
 #include "lexer.h"
+#include "symbol.h"
 
 static Token* curToken;
+
+int currentLine = 0;
+int currentColumn = 0;
 
 static Token* newToken(enum TokenType type) {
     Token* token = calloc(1, sizeof(Token));
@@ -13,11 +17,14 @@ static void addToken(enum TokenType type, char* value) {
     curToken->next = token;
     curToken->type = type;
     curToken->value = value;
+    curToken->line = currentLine;
+    curToken->column = currentColumn;
     curToken = token;
 }
 
 static char next(FILE* fp) {
     char c = getc(fp);
+    currentColumn++;
     return c;
 }
 
@@ -39,7 +46,7 @@ static void checkNumeric(FILE* fp, char c) {
     while(1) {
         value[i++] = c;
         if (!isdigit(peek(fp))) break;
-        c = tolower(fgetc(fp));
+        c = next(fp);
     }
 
     addToken(T_NUMBER, value);
@@ -51,11 +58,18 @@ static void checkKeyword(FILE* fp, char c) {
     while(1) {
         value[i++] = c;
         if (!isalnum(peek(fp))) break;
-        c = tolower(fgetc(fp));
+        c = next(fp);
+    }
+
+    // Check if a defined type
+    for (int i = 0; i < sizeof(builtinTypes)/sizeof(builtinTypes[0]); i++) {
+        if (strcmp(value, builtinTypes[i].name) == 0) {
+            addToken(T_TYPE, value);
+            return;
+        }
     }
 
     if (strcmp(value, "return") == 0) addToken(T_RETURN, value);
-    else if (strcmp(value, "uint8") == 0) addToken(T_TYPE, value);
     else addToken(T_ID, value);
 }
 
@@ -66,8 +80,23 @@ Token* lex(FILE* fp) {
     while (1) {
         char c = next(fp);
         
-        if (c == EOF) {addToken(T_END, NULL); break;}
+        if (c =='\n') {
+            currentLine++;
+            currentColumn = 0;
+        }
+
+        if (c == EOF) {
+            addToken(T_END, NULL);
+            break;
+        }
+
         if (isWhitespace(c)) continue;
+
+        if ((c == '/') && (peek(fp) == '/')) {
+            while (next(fp) != '\n') continue;
+            currentLine += 1;
+            continue;
+        }
 
         if (c == '(') {addToken(T_LPAREN, "{"); continue;}
         if (c == ')') {addToken(T_RPAREN, "}"); continue;}

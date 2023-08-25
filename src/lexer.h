@@ -13,6 +13,8 @@ struct Token {
     enum TokenType type;
     char *value;
     Token *next;
+    int line;
+    int column;
 };
 
 Token* lex(FILE*);

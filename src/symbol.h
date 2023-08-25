@@ -9,19 +9,14 @@ struct Type {
     int size;
 };
 
-static Type builtinTypes[] = {{.name="uint8", .size=1}};
+static Type builtinTypes[] = {{.name="char", .size=1}};
 
 typedef struct Symbol Symbol;
+
 struct Symbol {
     Token* token;
     Type* type;
-    char* memoryLocation;
-};
-
-typedef struct SymbolList SymbolList;
-struct SymbolList {
-    Symbol* symbol;
-    SymbolList* next;
+    char* location;
 };
 
 #endif

@@ -6,6 +6,7 @@
 #include <string.h>
 #include "lexer.h"
 #include "symbol.h"
+#include "scope.h"
 
 enum NodeType {N_TYPE, N_VAR_DECL, N_FUNC_DECL, N_BLOCK, N_VARIABLE, N_NUMBER, N_ASSIGNMENT, N_BINOP, N_RETURN};
 
