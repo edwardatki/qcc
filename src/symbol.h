@@ -16,7 +16,8 @@ typedef struct Symbol Symbol;
 struct Symbol {
     Token* token;
     Type* type;
-    char* location;
+    int global;
+    int stackPosition;
 };
 
 #endif

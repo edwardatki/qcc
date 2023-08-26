@@ -33,6 +33,8 @@ void enterNewScope() {
 
     newScope->id = scopeCount;
 
+    newScope->stackSize = 0;
+
     currentScope = newScope;
     scopeCount += 1;
 }
@@ -40,16 +42,26 @@ void enterNewScope() {
 void exitScope() {
     Scope* oldScope = currentScope;
     currentScope = currentScope->parentScope;
-    free(oldScope);
     // printf("EXIT SCOPE\n");
+}
+
+Scope* getCurrentScope() {
+    return currentScope;
 }
 
 void scopeAddSymbol(Symbol* symbol) {
     addSymbolListEntry(&currentScope->symbolList, symbol);
 
-    // TODO: Decide symbol location in memory
-    symbol->location = calloc(32, sizeof(char));
-    sprintf(symbol->location, "%s_%d", symbol->token->value, currentScope->id);
+    // Check if in global scope
+    if (currentScope->id == 0) {
+        symbol->global = 1;
+    } else {
+        symbol->global = 0;
+
+        // Allocate position on stack
+        symbol->stackPosition = currentScope->stackSize;
+        currentScope->stackSize += symbol->type->size;
+    }
 }
 
 // Finds the "most local" symbol of given identifier
@@ -71,5 +83,31 @@ Symbol* lookupSymbol(Token* token) {
     }
 
     printf("%d:%d %serror:%s '%s' undeclared\n", token->line, token->column, RED, RESET, token->value);
-    exit(1);
+    exit(EXIT_FAILURE);
+}
+
+int getSymbolStackOffset(Symbol* symbol, Scope* scope) {
+    // Traverse up from scope until symbol located adding up all stack sizes
+    // This should give us offsets for variables on parent stack frames
+
+    Scope* searchScope = scope;
+    int stackOffset = 0;
+    while (searchScope != NULL) {
+        // printf("SEARCHING SCOPE: %d size %d\n", searchScope->id, searchScope->stackSize);
+        SymbolListEntry* curEntry = searchScope->symbolList;
+        while (curEntry != NULL) {
+            if (curEntry->symbol != NULL) { // First item is always empty, should change how my lists work
+                // Check if matches the symbol we're looking for
+                if (strcmp(curEntry->symbol->token->value, symbol->token->value) == 0) {
+                    // TODO make this clearer
+                    return stackOffset+searchScope->stackSize-curEntry->symbol->stackPosition-1;
+                }
+            }
+            curEntry = curEntry->next;
+        }
+        stackOffset += searchScope->stackSize;
+        searchScope = searchScope->parentScope;
+    }
+
+    return -1;
 }

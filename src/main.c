@@ -11,7 +11,7 @@ int main() {
     Token* firstToken = lex(fp);
 
     Node* rootNode = parse(firstToken);
-
+    
     char* result = generate(rootNode);
     printf("\n--- OUTPUT ---\n");
     printf("%s", result);

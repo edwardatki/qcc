@@ -26,7 +26,7 @@ static void eat() {
 
 static void eatType(enum TokenType type) {
     if (curToken->type != type) {
-        char* messages[] = {"EOF", "'('", "')'", "'{'", "'}'", "','" "','", "'+'", "'-'", "'*'", "'/'", "'='", "a literal", "keyword 'return'", "an identifier", "a type", "';'", "keyword 'if'", "keyword 'else'"};
+        char* messages[] = {"EOF", "'('", "')'", "'{'", "'}'", "','" "','", "'+'", "'-'", "'*'", "'/'", "'='", "a literal", "keyword 'return'", "an identifier", "a type", "';'", "keyword 'if'", "keyword 'else'", "'>'", "'<'", "'>='", "'<='", "'=='", "'!='", "keyword 'while'"};
         printf("%d:%d %serror:%s expected %s but got %s\n", curToken->line, curToken->column, RED, RESET, messages[type], messages[curToken->type]);
         exit(EXIT_FAILURE);
     }
@@ -66,6 +66,7 @@ static Node* newNode(Token* token, enum TokenType type) {
     Node* node = calloc(1, sizeof(Node));
     node->token = token;
     node->type = type;
+    node->scope = getCurrentScope();
     return node;
 }
 
@@ -83,6 +84,7 @@ static Node* assignment () {
     Node* node = newNode(token, N_ASSIGNMENT);
     node->Assignment.variable = variableNode;
     node->Assignment.expr = expr();
+
     return node;
 }
 
@@ -125,8 +127,7 @@ Node* term () {
 
 // additive_expr : term ((PLUS | MINUS) term)*
 Node* additive_expr () {
-    Node* termNode = term();
-    Node* node = termNode;
+    Node* node = term();
 
     while (peek(T_PLUS) || peek(T_MINUS)) {
         Token* token = curToken;
@@ -140,9 +141,41 @@ Node* additive_expr () {
     return node;
 }
 
-// expr : additive_expr
+// relational_expr : additive_expr ((MORE | LESS | MORE_EQUAL | LESS_EQUAL) additive_expr)*
+Node* relational_expr () {
+    Node* node = additive_expr();
+
+    while (peek(T_MORE) || peek(T_LESS) || peek(T_MORE_EQUAL) || peek(T_LESS_EQUAL)) {
+        Token* token = curToken;
+        eat();
+        Node* oldNode = node;
+        node = newNode(token, N_BINOP);
+        node->BinOp.left = oldNode;
+        node->BinOp.right = additive_expr();
+    }
+
+    return node;
+}
+
+// equality_expr : relational_expr ((EQUAL | NOT_EQUAL) relational_expr)*
+Node* equality_expr () {
+    Node* node = relational_expr();
+
+    while (peek(T_EQUAL) || peek(T_NOT_EQUAL)) {
+        Token* token = curToken;
+        eat();
+        Node* oldNode = node;
+        node = newNode(token, N_BINOP);
+        node->BinOp.left = oldNode;
+        node->BinOp.right = relational_expr();
+    }
+
+    return node;
+}
+
+// expr : equality_expr
 static Node* expr() {
-    return additive_expr();
+    return equality_expr();
 }
 
 // return_statement : RETURN expr
@@ -178,6 +211,22 @@ static Node* if_statement() {
     return node;
 }
 
+// while_statement : WHILE LPAREN expr RPAREN statement
+static Node* while_statement() {
+    Token* token = curToken;
+    eatType(T_WHILE);
+
+    Node* node = newNode(token, N_WHILE);
+
+    eatType(T_LPAREN);
+    node->While.expr = expr();
+    eatType(T_RPAREN);
+
+    node->While.loop_statement = statement();
+
+    return node;
+}
+
 // statement : (return_statement SEMICOLON) | (if_statement) | (block) | (expr SEMICOLON)
 static Node* statement() {
     Node* node;
@@ -187,6 +236,8 @@ static Node* statement() {
         eatType(T_SEMICOLON);
     } else if (peek(T_IF)) {
         node = if_statement();
+    } else if (peek(T_WHILE)) {
+        node = while_statement();
     } else if (peek(T_LBRACE)) {
         node = block();
     } else {
@@ -212,7 +263,6 @@ static Node* var_decl() {
     Symbol* symbol = calloc(1, sizeof(Symbol));
     symbol->token = curToken;
     symbol->type = symbolType;
-    symbol->location = "???";
 
     scopeAddSymbol(symbol);
 
@@ -277,7 +327,7 @@ Node* parse(Token* firstToken) {
     enterNewScope();
 
     Node* rootNode = function_decl();
-
+    
     exitScope();
 
     return rootNode;

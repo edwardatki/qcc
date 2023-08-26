@@ -1,12 +1,10 @@
 char main () {
-    char test;
-    test = 1;
+    char result;
+    result = 0;
 
-    if (test) {
-        return 27;
-    } else {
-        test = test + 1;
+    while (result < 15) {
+        result = result + 1;
     }
 
-    return 0;
+    return result;
 }

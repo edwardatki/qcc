@@ -76,6 +76,7 @@ static void checkKeyword(FILE* fp, char c) {
     if (strcmp(value, "return") == 0) addToken(T_RETURN, value, currentLine, startColumn);
     else if (strcmp(value, "if") == 0) addToken(T_IF, value, currentLine, startColumn);
     else if (strcmp(value, "else") == 0) addToken(T_ELSE, value, currentLine, startColumn);
+    else if (strcmp(value, "while") == 0) addToken(T_WHILE, value, currentLine, startColumn);
     else addToken(T_ID, value, currentLine, startColumn);
 }
 
@@ -86,25 +87,36 @@ Token* lex(FILE* fp) {
     while (1) {
         char c = next(fp);
         
+        // Track line number
         if (c =='\n') {
             currentLine++;
             currentColumn = 0;
         }
 
+        // Exit at end of file
         if (c == EOF) {
             addToken(T_END, NULL, currentLine, currentColumn);
             break;
         }
 
+        // Skip whitespace
         if (isWhitespace(c)) {
             continue;
         }
 
+        // Skip comments
         if ((c == '/') && (peek(fp) == '/')) {
-            while (peek(fp) != '\n') next(fp);
+            while ((peek(fp) != '\n') && (peek(fp) != EOF)) next(fp);
             continue;
         }
 
+        // Check double character tokens
+        if ((c == '>') && (peek(fp) == '=')) {addToken(T_MORE_EQUAL, ">=", currentLine, currentColumn); next(fp); continue;}
+        if ((c == '<') && (peek(fp) == '=')) {addToken(T_LESS_EQUAL, "<=", currentLine, currentColumn); next(fp); continue;}
+        if ((c == '=') && (peek(fp) == '=')) {addToken(T_EQUAL, "==", currentLine, currentColumn); next(fp); continue;}
+        if ((c == '!') && (peek(fp) == '=')) {addToken(T_NOT_EQUAL, "!=", currentLine, currentColumn); next(fp); continue;}
+
+        // Check single character tokens
         if (c == '(') {addToken(T_LPAREN, "{", currentLine, currentColumn); continue;}
         if (c == ')') {addToken(T_RPAREN, "}", currentLine, currentColumn); continue;}
         if (c == '{') {addToken(T_LBRACE, "{", currentLine, currentColumn); continue;}
@@ -116,7 +128,10 @@ Token* lex(FILE* fp) {
         if (c == '/') {addToken(T_DIV, "/", currentLine, currentColumn); continue;}
         if (c == '=') {addToken(T_ASSIGN, "=", currentLine, currentColumn); continue;}
         if (c == ';') {addToken(T_SEMICOLON, ";", currentLine, currentColumn); continue;}
+        if (c == '>') {addToken(T_MORE, ">", currentLine, currentColumn); continue;}
+        if (c == '<') {addToken(T_LESS, "<", currentLine, currentColumn); continue;}
 
+        // Check multi character tokens
         if (isdigit(c)) {checkNumeric(fp, c); continue;}
         if (isalpha(c)) {checkKeyword(fp, c); continue;}
     }
