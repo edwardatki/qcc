@@ -6,11 +6,11 @@
 #include <ctype.h>
 #include <string.h>
 
-enum TokenType {T_END=0, T_LPAREN, T_RPAREN, T_LBRACE, T_RBRACE, T_COMMA, T_PLUS, T_MINUS, T_MUL, T_DIV, T_ASSIGN, T_NUMBER, T_RETURN, T_ID, T_TYPE, T_SEMICOLON, T_IF, T_ELSE, T_MORE, T_LESS, T_MORE_EQUAL, T_LESS_EQUAL, T_EQUAL, T_NOT_EQUAL, T_WHILE};
+enum TokenKind {TK_END=0, TK_LPAREN, TK_RPAREN, TK_LBRACE, TK_RBRACE, TK_COMMA, TK_PLUS, TK_MINUS, TK_ASTERISK, TK_DIV, TK_ASSIGN, TK_NUMBER, TK_RETURN, TK_ID, TK_TYPE, TK_SEMICOLON, TK_IF, TK_ELSE, TK_MORE, TK_LESS, TK_MORE_EQUAL, TK_LESS_EQUAL, TK_EQUAL, TK_NOT_EQUAL, TK_WHILE, TK_AMPERSAND};
 
 typedef struct Token Token;
 struct Token {
-    enum TokenType type;
+    enum TokenKind kind;
     char *value;
     Token *next;
     int line;

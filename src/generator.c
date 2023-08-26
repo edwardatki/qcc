@@ -60,7 +60,7 @@ static Register* allocReg(int size) {
 
 static void freeReg(Register* reg) {
     if (reg == NULL) return;
-    
+
     // Mark register as free
     reg->free = 1;
 
@@ -102,7 +102,6 @@ static void loadVariable(Register* reg, Scope* scope, Symbol* symbol) {
 }
 
 static void storeVariable(Register* reg, Scope* scope, Symbol* symbol) {
-
     Register* pointerReg = allocReg(2);
 
     if (symbol->global) {
@@ -113,6 +112,16 @@ static void storeVariable(Register* reg, Scope* scope, Symbol* symbol) {
     outputPointer += sprintf(outputPointer, "\tmov [%s], %s\n", pointerReg->name, reg->name);  
 
     freeReg(pointerReg);
+}
+
+static char* getVariableLocation(Scope* scope, Symbol* symbol) {
+    if (symbol->global) {
+        return symbol->token->value;
+    } else {
+        char* location = calloc(32, sizeof(char));
+        sprintf(location, "sp+%d", getSymbolStackOffset(symbol, scope)+localStackUsage);
+        return location;
+    }
 }
 
 static void visitVarDecl(Node* node, int depth) {
@@ -136,6 +145,7 @@ static void visitFuncDecl(Node* node, int depth) {
     visitAll(node->FunctionDecl.formalParameters, depth+1);
     visit(node->FunctionDecl.block, depth+1);
 
+    outputPointer += sprintf(outputPointer, ".%s_exit:\n", node->token->value);
     outputPointer += sprintf(outputPointer, "\tret\n\n");
 }
 
@@ -186,7 +196,7 @@ static void visitAssignment(Node* node, int depth) {
     freeReg(reg);
 }
 
-static Register* visitBinop(Node* node, int depth) {
+static Register* visitBinOp(Node* node, int depth) {
     printIndent(depth);
     printf("BinOp: %s\n", node->token->value);
 
@@ -203,10 +213,11 @@ static Register* visitBinop(Node* node, int depth) {
     if (strcmp(regL->name, "a") != 0) outputPointer += sprintf(outputPointer, "\tmov a, %s\n", regL->name);
 
     // Perform operation
-    char opcode[4] = "???";
-    if (strcmp(node->token->value, "+") == 0) outputPointer += sprintf(outputPointer, "\tadd %s\n", regR->name);
-    else if (strcmp(node->token->value, "-") == 0) outputPointer += sprintf(outputPointer, "\tsub %s\n", regR->name);
-    else if (strcmp(node->token->value, ">") == 0) {
+    if (strcmp(node->token->value, "+") == 0) {
+        outputPointer += sprintf(outputPointer, "\tadd %s\n", regR->name);
+    } else if (strcmp(node->token->value, "-") == 0) {
+        outputPointer += sprintf(outputPointer, "\tsub %s\n", regR->name);
+    } else if (strcmp(node->token->value, ">") == 0) {
         static int labelCounter = 0;
         
         outputPointer += sprintf(outputPointer, "\tcmp %s\n", regR->name);
@@ -310,6 +321,53 @@ static Register* visitBinop(Node* node, int depth) {
     }
 
     return regL;
+}
+
+static Register* visitUnaryOp(Node* node, int depth) {
+    printIndent(depth);
+    printf("UnaryOp: %s\n", node->token->value);
+
+    // Perform operation
+    if (strcmp(node->token->value, "+") == 0) {
+        // Don't need to do anything here
+        Register* regL = visit(node->UnaryOp.left, depth+1);
+        return regL;
+    } else if (strcmp(node->token->value, "-") == 0) {
+        Register* regL = visit(node->UnaryOp.left, depth+1);
+
+        // Move left out of accumulator if necessary
+        if (strcmp(regL->name, "a") == 0) {
+            regL = allocReg(1);
+            outputPointer += sprintf(outputPointer, "\tmov %s, a\n", regL->name);
+            outputPointer += sprintf(outputPointer, "\tmov a, 0\n");
+            outputPointer += sprintf(outputPointer, "\tsub %s\n", regL->name);
+            outputPointer += sprintf(outputPointer, "\tmov a, %s\n", regL->name);
+            freeReg(regL);
+            regL = &registers[0];
+        } else {
+            outputPointer += sprintf(outputPointer, "\tmov a, 0\n");
+            outputPointer += sprintf(outputPointer, "\tsub %s\n", regL->name);
+        }
+
+        return regL;
+    } else if (strcmp(node->token->value, "*") == 0) {
+        outputPointer += sprintf(outputPointer, "\t???\n");
+        return NULL;
+    } else if (strcmp(node->token->value, "&") == 0) {
+        // Left has to be a variable, this check should probably be done during parsing instead
+        if (node->UnaryOp.left->kind != N_VARIABLE) {
+            printf("%d:%d %serror:%s left must be variable\n", node->UnaryOp.left->token->line,node->UnaryOp.left->token->column, RED, RESET);
+            exit(EXIT_FAILURE);
+        }
+
+        Register* pointerReg = allocReg(2);
+        outputPointer += sprintf(outputPointer, "\tmov %s, %s\n", pointerReg->name, getVariableLocation(node->scope, node->UnaryOp.left->Variable.symbol));
+
+        return pointerReg;
+    } else {
+        outputPointer += sprintf(outputPointer, "\t???\n");
+        return NULL;
+    }
 }
 
 static void visitReturn(Node* node, int depth) {
@@ -421,7 +479,7 @@ static void visitWhile(Node* node, int depth) {
 }
 
 static Register* visit(Node* node, int depth) {
-    switch (node->type) {
+    switch (node->kind) {
         case N_VAR_DECL:
             visitVarDecl(node, depth);
             return NULL;
@@ -439,7 +497,9 @@ static Register* visit(Node* node, int depth) {
             visitAssignment(node, depth);
             return NULL;
         case N_BINOP:
-            return visitBinop(node, depth);
+            return visitBinOp(node, depth);
+        case N_UNARY:
+            return visitUnaryOp(node, depth);
         case N_RETURN:
             visitReturn(node, depth);
             return NULL;

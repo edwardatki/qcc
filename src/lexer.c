@@ -6,16 +6,16 @@ static Token* curToken;
 int currentLine = 1;
 int currentColumn = 0;
 
-static Token* newToken(enum TokenType type) {
+static Token* newToken(enum TokenKind kind) {
     Token* token = calloc(1, sizeof(Token));
-    token->type = type;
+    token->kind = kind;
     return token;
 }
 
-static void addToken(enum TokenType type, char* value, int line, int column) {
-    Token* token = newToken(T_END);
+static void addToken(enum TokenKind kind, char* value, int line, int column) {
+    Token* token = newToken(TK_END);
     curToken->next = token;
-    curToken->type = type;
+    curToken->kind = kind;
     curToken->value = value;
     curToken->line = line;
     curToken->column = column;
@@ -51,7 +51,7 @@ static void checkNumeric(FILE* fp, char c) {
         c = next(fp);
     }
 
-    addToken(T_NUMBER, value, currentLine, startColumn);
+    addToken(TK_NUMBER, value, currentLine, startColumn);
 }
 
 static void checkKeyword(FILE* fp, char c) {
@@ -66,22 +66,22 @@ static void checkKeyword(FILE* fp, char c) {
     }
 
     // Check if a defined type
-    for (int i = 0; i < sizeof(builtinTypes)/sizeof(builtinTypes[0]); i++) {
-        if (strcmp(value, builtinTypes[i].name) == 0) {
-            addToken(T_TYPE, value, currentLine, startColumn);
+    for (int i = 0; i < sizeof(baseTypes)/sizeof(baseTypes[0]); i++) {
+        if (strcmp(value, baseTypes[i]->name) == 0) {
+            addToken(TK_TYPE, value, currentLine, startColumn); 
             return;
         }
     }
 
-    if (strcmp(value, "return") == 0) addToken(T_RETURN, value, currentLine, startColumn);
-    else if (strcmp(value, "if") == 0) addToken(T_IF, value, currentLine, startColumn);
-    else if (strcmp(value, "else") == 0) addToken(T_ELSE, value, currentLine, startColumn);
-    else if (strcmp(value, "while") == 0) addToken(T_WHILE, value, currentLine, startColumn);
-    else addToken(T_ID, value, currentLine, startColumn);
+    if (strcmp(value, "return") == 0) addToken(TK_RETURN, value, currentLine, startColumn);
+    else if (strcmp(value, "if") == 0) addToken(TK_IF, value, currentLine, startColumn);
+    else if (strcmp(value, "else") == 0) addToken(TK_ELSE, value, currentLine, startColumn);
+    else if (strcmp(value, "while") == 0) addToken(TK_WHILE, value, currentLine, startColumn);
+    else addToken(TK_ID, value, currentLine, startColumn);
 }
 
 Token* lex(FILE* fp) {
-    Token* firstToken = newToken(T_END);
+    Token* firstToken = newToken(TK_END);
     curToken = firstToken;
 
     while (1) {
@@ -95,7 +95,7 @@ Token* lex(FILE* fp) {
 
         // Exit at end of file
         if (c == EOF) {
-            addToken(T_END, NULL, currentLine, currentColumn);
+            addToken(TK_END, NULL, currentLine, currentColumn);
             break;
         }
 
@@ -111,25 +111,26 @@ Token* lex(FILE* fp) {
         }
 
         // Check double character tokens
-        if ((c == '>') && (peek(fp) == '=')) {addToken(T_MORE_EQUAL, ">=", currentLine, currentColumn); next(fp); continue;}
-        if ((c == '<') && (peek(fp) == '=')) {addToken(T_LESS_EQUAL, "<=", currentLine, currentColumn); next(fp); continue;}
-        if ((c == '=') && (peek(fp) == '=')) {addToken(T_EQUAL, "==", currentLine, currentColumn); next(fp); continue;}
-        if ((c == '!') && (peek(fp) == '=')) {addToken(T_NOT_EQUAL, "!=", currentLine, currentColumn); next(fp); continue;}
+        if ((c == '>') && (peek(fp) == '=')) {addToken(TK_MORE_EQUAL, ">=", currentLine, currentColumn); next(fp); continue;}
+        if ((c == '<') && (peek(fp) == '=')) {addToken(TK_LESS_EQUAL, "<=", currentLine, currentColumn); next(fp); continue;}
+        if ((c == '=') && (peek(fp) == '=')) {addToken(TK_EQUAL, "==", currentLine, currentColumn); next(fp); continue;}
+        if ((c == '!') && (peek(fp) == '=')) {addToken(TK_NOT_EQUAL, "!=", currentLine, currentColumn); next(fp); continue;}
 
         // Check single character tokens
-        if (c == '(') {addToken(T_LPAREN, "{", currentLine, currentColumn); continue;}
-        if (c == ')') {addToken(T_RPAREN, "}", currentLine, currentColumn); continue;}
-        if (c == '{') {addToken(T_LBRACE, "{", currentLine, currentColumn); continue;}
-        if (c == '}') {addToken(T_RBRACE, "}", currentLine, currentColumn); continue;}
-        if (c == ',') {addToken(T_COMMA, ",", currentLine, currentColumn); continue;}
-        if (c == '+') {addToken(T_PLUS, "+", currentLine, currentColumn); continue;}
-        if (c == '-') {addToken(T_MINUS, "-", currentLine, currentColumn); continue;}
-        if (c == '*') {addToken(T_MUL, "*", currentLine, currentColumn); continue;}
-        if (c == '/') {addToken(T_DIV, "/", currentLine, currentColumn); continue;}
-        if (c == '=') {addToken(T_ASSIGN, "=", currentLine, currentColumn); continue;}
-        if (c == ';') {addToken(T_SEMICOLON, ";", currentLine, currentColumn); continue;}
-        if (c == '>') {addToken(T_MORE, ">", currentLine, currentColumn); continue;}
-        if (c == '<') {addToken(T_LESS, "<", currentLine, currentColumn); continue;}
+        if (c == '(') {addToken(TK_LPAREN, "{", currentLine, currentColumn); continue;}
+        if (c == ')') {addToken(TK_RPAREN, "}", currentLine, currentColumn); continue;}
+        if (c == '{') {addToken(TK_LBRACE, "{", currentLine, currentColumn); continue;}
+        if (c == '}') {addToken(TK_RBRACE, "}", currentLine, currentColumn); continue;}
+        if (c == ',') {addToken(TK_COMMA, ",", currentLine, currentColumn); continue;}
+        if (c == '+') {addToken(TK_PLUS, "+", currentLine, currentColumn); continue;}
+        if (c == '-') {addToken(TK_MINUS, "-", currentLine, currentColumn); continue;}
+        if (c == '*') {addToken(TK_ASTERISK, "*", currentLine, currentColumn); continue;}
+        if (c == '/') {addToken(TK_DIV, "/", currentLine, currentColumn); continue;}
+        if (c == '=') {addToken(TK_ASSIGN, "=", currentLine, currentColumn); continue;}
+        if (c == ';') {addToken(TK_SEMICOLON, ";", currentLine, currentColumn); continue;}
+        if (c == '>') {addToken(TK_MORE, ">", currentLine, currentColumn); continue;}
+        if (c == '<') {addToken(TK_LESS, "<", currentLine, currentColumn); continue;}
+        if (c == '&') {addToken(TK_AMPERSAND, "&", currentLine, currentColumn); continue;}
 
         // Check multi character tokens
         if (isdigit(c)) {checkNumeric(fp, c); continue;}

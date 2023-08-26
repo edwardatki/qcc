@@ -1,10 +1,8 @@
 char main () {
-    char result;
-    result = 0;
+    char* result;
+    char test;
 
-    while (result < 15) {
-        result = result + 1;
-    }
+    result = &test;
 
-    return result;
+    return 0;
 }

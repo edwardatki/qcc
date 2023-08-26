@@ -8,7 +8,7 @@
 #include "symbol.h"
 #include "scope.h"
 
-enum NodeType {N_TYPE, N_VAR_DECL, N_FUNC_DECL, N_BLOCK, N_VARIABLE, N_NUMBER, N_ASSIGNMENT, N_BINOP, N_RETURN, N_IF, N_WHILE};
+enum NodeKind {N_TYPE, N_VAR_DECL, N_FUNC_DECL, N_BLOCK, N_VARIABLE, N_NUMBER, N_ASSIGNMENT, N_BINOP, N_UNARY, N_RETURN, N_IF, N_WHILE};
 
 struct NodeListEntry;
 typedef struct NodeListEntry NodeListEntry;
@@ -16,7 +16,8 @@ typedef struct NodeListEntry NodeListEntry;
 typedef struct Node Node;
 struct Node {
     Token* token;
-    enum NodeType type;
+    enum NodeKind kind;
+    Type* type;
     Scope* scope;
 
     union {
@@ -43,6 +44,10 @@ struct Node {
             Node* left;
             Node* right;
         } BinOp;
+        struct {
+            Node* left;
+            Node* right;
+        } UnaryOp;
         struct {
             Node* expr;
         } Return;
