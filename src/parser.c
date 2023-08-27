@@ -34,8 +34,6 @@ static void eatKind(enum TokenKind kind) {
 }
 
 static Type* getSymbolType(Token* token) {
-    // All chars for now
-    // return &typeChar;
     for (int i = 0; i < sizeof(baseTypes)/sizeof(baseTypes[0]); i++) {
         if (strcmp(baseTypes[i]->name, token->value) == 0) return baseTypes[i];
     }
@@ -262,26 +260,26 @@ static Node* statement() {
     return node;
 }
 
-// type : TYPE
+// type : TYPE (ASTERISK)
 static Type* type() {
-    Type* symbolType = getSymbolType(curToken);
+    Type* type = getSymbolType(curToken);
     eatKind(TK_TYPE);
-    return symbolType;
+
+    while (peek(TK_ASTERISK)) {
+        eat();
+        type = pointerTo(type);
+    }
+
+    return type;
 }
 
-// TODO not quite right, wouldn't allow pointers to pointers etc
-// var_decl : type (ASTERISK) ID SEMICOLON
+// var_decl : type ID SEMICOLON
 static Node* var_decl() {
     Type* symbolType = type();
     Node* node = newNode(curToken, N_VAR_DECL);
 
     Symbol* symbol = calloc(1, sizeof(Symbol));
     symbol->type = symbolType;
-
-    if (peek(TK_ASTERISK)) {
-        eat();
-        symbol->type = pointerTo(symbol->type);
-    }
 
     symbol->token = curToken;
 

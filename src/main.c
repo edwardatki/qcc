@@ -13,8 +13,12 @@ int main() {
     Node* rootNode = parse(firstToken);
     
     char* result = generate(rootNode);
-    printf("\n--- OUTPUT ---\n");
-    printf("%s", result);
+    // printf("\n--- OUTPUT ---\n");
+    // printf("%s", result);
+
+    FILE *outputFile;
+    outputFile = fopen("test.asm", "w");
+    fprintf(outputFile, "%s", result);
 
     return 0;
 }

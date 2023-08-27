@@ -11,7 +11,7 @@ struct Type {
     Type* base;
 };
 
-static Type typeChar = {.name="char", .size=1};
+static Type typeChar = {.name="char", .kind=TY_CHAR, .size=1};
 
 static Type* baseTypes[] = {&typeChar};
 

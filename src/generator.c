@@ -203,6 +203,12 @@ static Register* visitBinOp(Node* node, int depth) {
     Register* regL = visit(node->BinOp.left, depth+1);
     Register* regR = visit(node->BinOp.right, depth+1);
 
+    // Can only do 8-bit operations for now
+    if ((regL->size > 1) | (regR->size > 1)) {
+        printf("%d:%d %serror:%s only 8-bit operations supported\n", node->UnaryOp.left->token->line,node->UnaryOp.left->token->column, RED, RESET);
+        exit(EXIT_FAILURE);
+    }
+
     // Push accumulator if necessary
     if ((strcmp(regL->name, "a") != 0) && (!registers[0].free)) {
         outputPointer += sprintf(outputPointer, "\tpush a\n");
@@ -335,6 +341,12 @@ static Register* visitUnaryOp(Node* node, int depth) {
     } else if (strcmp(node->token->value, "-") == 0) {
         Register* regL = visit(node->UnaryOp.left, depth+1);
 
+        // Can only do 8-bit operations for now
+        if (regL->size > 1) {
+            printf("%d:%d %serror:%s only 8-bit operations supported\n", node->UnaryOp.left->token->line,node->UnaryOp.left->token->column, RED, RESET);
+            exit(EXIT_FAILURE);
+        }
+
         // Move left out of accumulator if necessary
         if (strcmp(regL->name, "a") == 0) {
             regL = allocReg(1);
@@ -351,17 +363,41 @@ static Register* visitUnaryOp(Node* node, int depth) {
 
         return regL;
     } else if (strcmp(node->token->value, "*") == 0) {
-        outputPointer += sprintf(outputPointer, "\t???\n");
-        return NULL;
-    } else if (strcmp(node->token->value, "&") == 0) {
         // Left has to be a variable, this check should probably be done during parsing instead
         if (node->UnaryOp.left->kind != N_VARIABLE) {
-            printf("%d:%d %serror:%s left must be variable\n", node->UnaryOp.left->token->line,node->UnaryOp.left->token->column, RED, RESET);
+            printf("%d:%d %serror:%s left must be a variable\n", node->UnaryOp.left->token->line,node->UnaryOp.left->token->column, RED, RESET);
             exit(EXIT_FAILURE);
         }
 
-        Register* pointerReg = allocReg(2);
-        outputPointer += sprintf(outputPointer, "\tmov %s, %s\n", pointerReg->name, getVariableLocation(node->scope, node->UnaryOp.left->Variable.symbol));
+        Symbol* symbol = node->UnaryOp.left->Variable.symbol;
+
+        printIndent(depth+1);
+        printf("Variable: %s\n", symbol->token->value);
+
+        // Must be a pointer, once again this should probably be done during parsing instead
+        if (symbol->type->kind != TY_POINTER) {
+            printf("%d:%d %serror:%s left must be a pointer\n", node->UnaryOp.left->token->line,node->UnaryOp.left->token->column, RED, RESET);
+            exit(EXIT_FAILURE);
+        }
+
+        Register* regL = allocReg(symbol->type->base->size);
+        loadVariable(regL, node->scope, symbol);
+        
+        return regL;
+    } else if (strcmp(node->token->value, "&") == 0) {
+        // Left has to be a variable, this check should probably be done during parsing instead
+        if (node->UnaryOp.left->kind != N_VARIABLE) {
+            printf("%d:%d %serror:%s left must be a variable\n", node->UnaryOp.left->token->line,node->UnaryOp.left->token->column, RED, RESET);
+            exit(EXIT_FAILURE);
+        }
+
+        Symbol* symbol = node->UnaryOp.left->Variable.symbol;
+
+        printIndent(depth+1);
+        printf("Variable: %s\n", symbol->token->value);
+
+        Register* pointerReg = allocReg(pointerTo(symbol->type)->size);
+        outputPointer += sprintf(outputPointer, "\tmov %s, %s\n", pointerReg->name, getVariableLocation(node->scope, symbol));
 
         return pointerReg;
     } else {
