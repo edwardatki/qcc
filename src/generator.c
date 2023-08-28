@@ -363,34 +363,16 @@ static Register* visitUnaryOp(Node* node, int depth) {
 
         return regL;
     } else if (strcmp(node->token->value, "*") == 0) {
-        // Left has to be a variable, this check should probably be done during parsing instead
-        if (node->UnaryOp.left->kind != N_VARIABLE) {
-            printf("%d:%d %serror:%s left must be a variable\n", node->UnaryOp.left->token->line,node->UnaryOp.left->token->column, RED, RESET);
-            exit(EXIT_FAILURE);
-        }
-
         Symbol* symbol = node->UnaryOp.left->Variable.symbol;
 
         printIndent(depth+1);
         printf("Variable: %s\n", symbol->token->value);
-
-        // Must be a pointer, once again this should probably be done during parsing instead
-        if (symbol->type->kind != TY_POINTER) {
-            printf("%d:%d %serror:%s left must be a pointer\n", node->UnaryOp.left->token->line,node->UnaryOp.left->token->column, RED, RESET);
-            exit(EXIT_FAILURE);
-        }
 
         Register* regL = allocReg(symbol->type->base->size);
         loadVariable(regL, node->scope, symbol);
         
         return regL;
     } else if (strcmp(node->token->value, "&") == 0) {
-        // Left has to be a variable, this check should probably be done during parsing instead
-        if (node->UnaryOp.left->kind != N_VARIABLE) {
-            printf("%d:%d %serror:%s left must be a variable\n", node->UnaryOp.left->token->line,node->UnaryOp.left->token->column, RED, RESET);
-            exit(EXIT_FAILURE);
-        }
-
         Symbol* symbol = node->UnaryOp.left->Variable.symbol;
 
         printIndent(depth+1);

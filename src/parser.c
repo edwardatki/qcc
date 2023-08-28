@@ -25,8 +25,9 @@ static void eat() {
 
 
 static void eatKind(enum TokenKind kind) {
+    char* messages[] = {"EOF", "'('", "')'", "'{'", "'}'", "','" "','", "'+'", "'-'", "'*'", "'/'", "'='", "a literal", "keyword 'return'", "an identifier", "a type", "';'", "keyword 'if'", "keyword 'else'", "'>'", "'<'", "'>='", "'<='", "'=='", "'!='", "keyword 'while'", "'&'"};
+    // printf("%s %s %s\n", messages[curToken->kind], (curToken->kind == kind) ? "==" : "!=", messages[kind]);
     if (curToken->kind != kind) {
-        char* messages[] = {"EOF", "'('", "')'", "'{'", "'}'", "','" "','", "'+'", "'-'", "'*'", "'/'", "'='", "a literal", "keyword 'return'", "an identifier", "a type", "';'", "keyword 'if'", "keyword 'else'", "'>'", "'<'", "'>='", "'<='", "'=='", "'!='", "keyword 'while'", "'&'"};
         printf("%d:%d %serror:%s expected %s but got %s\n", curToken->line, curToken->column, RED, RESET, messages[kind], messages[curToken->kind]);
         exit(EXIT_FAILURE);
     }
@@ -90,12 +91,41 @@ static Node* assignment () {
     return node;
 }
 
-// factor : ((PLUS | MINUS | ASTERISK | AMPERSAND) factor) | NUMBER | ID | assignment | LPAREN expr RPAREN
+// factor : ((PLUS | MINUS) factor) | ((ASTERISK | AMPERSAND) variable) | NUMBER | ID | assignment | LPAREN expr RPAREN
 static Node* factor () {
-    if (peek(TK_PLUS) || peek(TK_MINUS) || peek(TK_ASTERISK) || peek(TK_AMPERSAND)) {
+    if (peek(TK_PLUS) || peek(TK_MINUS)) {
         Node* node = newNode(curToken, N_UNARY);
         eat();
         node->UnaryOp.left = factor();
+        return node;
+    } else if (peek(TK_ASTERISK) || peek(TK_AMPERSAND)) {
+        // TODO this won't allow something like *(pointer + 1)
+        // Should use an expr (maybe starting at additive_expr actually) instead of a just variable
+
+        int mustBePointer = 0;
+        if (peek(TK_ASTERISK)) mustBePointer = 1;
+
+        Node* node = newNode(curToken, N_UNARY);
+        eat();
+
+        // Just to give a clearer error message
+        if (!peek(TK_ID)) eatKind(TK_ID);
+
+        // Lookup symbol from current scope
+        Node* variableNode = newNode(curToken, N_VARIABLE);
+        variableNode->Variable.symbol = lookupSymbol(curToken);
+
+        // Must be a pointer to be dereferenced
+        if (mustBePointer) {
+            if (variableNode->Variable.symbol->type->kind != TY_POINTER) {
+                printf("%d:%d %serror:%s left must be a pointer\n", variableNode->token->line, variableNode->token->column, RED, RESET);
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        eat(TK_ID);
+
+        node->UnaryOp.left = variableNode;
         return node;
     } else if (peek(TK_NUMBER)) {
         Node* node = newNode(curToken, N_NUMBER);

@@ -100,7 +100,7 @@ int getSymbolStackOffset(Symbol* symbol, Scope* scope) {
                 // Check if matches the symbol we're looking for
                 if (strcmp(curEntry->symbol->token->value, symbol->token->value) == 0) {
                     // TODO make this clearer
-                    return stackOffset+searchScope->stackSize-curEntry->symbol->stackPosition-1;
+                    return stackOffset+searchScope->stackSize-curEntry->symbol->stackPosition-curEntry->symbol->type->size;
                 }
             }
             curEntry = curEntry->next;

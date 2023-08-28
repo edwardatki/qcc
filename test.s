@@ -3,7 +3,7 @@ char main () {
     char test;
 
     result = &test;
-    test = -(*result)+1;
+    test = *result;
 
     return 0;
 }
