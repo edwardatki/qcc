@@ -25,7 +25,6 @@ struct Node {
             Symbol* symbol;
         } VarDecl;
         struct {
-            Type* returnType;
             Node* block;
             NodeListEntry* formalParameters;
         } FunctionDecl;

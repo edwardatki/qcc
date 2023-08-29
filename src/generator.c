@@ -138,7 +138,7 @@ static void visitFuncDecl(Node* node, int depth) {
     if (strcmp(node->token->value, "main") != 0) return;
 
     printIndent(depth);
-    printf("Function declaration: %s %s\n", node->FunctionDecl.returnType->name, node->token->value);
+    printf("Function declaration: %s %s\n", node->type->name, node->token->value);
 
     outputPointer += sprintf(outputPointer, "%s:\n", node->token->value);
 
@@ -365,6 +365,7 @@ static Register* visitUnaryOp(Node* node, int depth) {
     } else if (strcmp(node->token->value, "*") == 0) {
         Symbol* symbol = node->UnaryOp.left->Variable.symbol;
 
+        printf("%s\t", node->UnaryOp.left->type->name);
         printIndent(depth+1);
         printf("Variable: %s\n", symbol->token->value);
 
@@ -375,6 +376,7 @@ static Register* visitUnaryOp(Node* node, int depth) {
     } else if (strcmp(node->token->value, "&") == 0) {
         Symbol* symbol = node->UnaryOp.left->Variable.symbol;
 
+        printf("%s\t", node->UnaryOp.left->type->name);
         printIndent(depth+1);
         printf("Variable: %s\n", symbol->token->value);
 
@@ -497,6 +499,7 @@ static void visitWhile(Node* node, int depth) {
 }
 
 static Register* visit(Node* node, int depth) {
+    printf("%s\t", node->type->name);
     switch (node->kind) {
         case N_VAR_DECL:
             visitVarDecl(node, depth);

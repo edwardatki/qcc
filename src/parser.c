@@ -80,6 +80,7 @@ static Node* assignment () {
     // Lookup symbol from current scope
     Node* variableNode = newNode(curToken, N_VARIABLE);
     variableNode->Variable.symbol = lookupSymbol(curToken);
+    variableNode->type = variableNode->Variable.symbol->type;
 
     Token* token = curToken;
     eat(TK_ID);
@@ -87,6 +88,7 @@ static Node* assignment () {
     Node* node = newNode(token, N_ASSIGNMENT);
     node->Assignment.variable = variableNode;
     node->Assignment.expr = expr();
+    node->type = variableNode->Variable.symbol->type;
 
     return node;
 }
@@ -97,6 +99,7 @@ static Node* factor () {
         Node* node = newNode(curToken, N_UNARY);
         eat();
         node->UnaryOp.left = factor();
+        node->type = node->UnaryOp.left->type;
         return node;
     } else if (peek(TK_ASTERISK) || peek(TK_AMPERSAND)) {
         // TODO this won't allow something like *(pointer + 1)
@@ -114,6 +117,7 @@ static Node* factor () {
         // Lookup symbol from current scope
         Node* variableNode = newNode(curToken, N_VARIABLE);
         variableNode->Variable.symbol = lookupSymbol(curToken);
+        variableNode->type = variableNode->Variable.symbol->type;
 
         // Must be a pointer to be dereferenced
         if (mustBePointer) {
@@ -126,9 +130,14 @@ static Node* factor () {
         eat(TK_ID);
 
         node->UnaryOp.left = variableNode;
+
+        if (mustBePointer) node->type = node->UnaryOp.left->type->base;
+        else node->type = pointerTo(node->UnaryOp.left->type);
+
         return node;
     } else if (peek(TK_NUMBER)) {
         Node* node = newNode(curToken, N_NUMBER);
+        node->type = &typeChar; // Temp, will have to check the token value to determine the correct data type
         eat();
         return node;
     } else if (peek(TK_ID)) {
@@ -138,6 +147,7 @@ static Node* factor () {
             // Lookup symbol from current scope
             Node* node = newNode(curToken, N_VARIABLE);
             node->Variable.symbol = lookupSymbol(curToken);
+            node->type = node->Variable.symbol->type;
             eat(TK_ID);
             return node;
         }
@@ -162,6 +172,7 @@ Node* term () {
         node = newNode(token, N_BINOP);
         node->BinOp.left = factorNode;
         node->BinOp.right = term();
+        node->type = getCommonType(node->BinOp.left->type, node->BinOp.right->type);
     }
     
     return node;
@@ -178,6 +189,7 @@ Node* additive_expr () {
         node = newNode(token, N_BINOP);
         node->BinOp.left = oldNode;
         node->BinOp.right = term();
+        node->type = getCommonType(node->BinOp.left->type, node->BinOp.right->type);
     }
 
     return node;
@@ -194,6 +206,7 @@ Node* relational_expr () {
         node = newNode(token, N_BINOP);
         node->BinOp.left = oldNode;
         node->BinOp.right = additive_expr();
+        node->type = getCommonType(node->BinOp.left->type, node->BinOp.right->type);
     }
 
     return node;
@@ -210,6 +223,7 @@ Node* equality_expr () {
         node = newNode(token, N_BINOP);
         node->BinOp.left = oldNode;
         node->BinOp.right = relational_expr();
+        node->type = getCommonType(node->BinOp.left->type, node->BinOp.right->type);
     }
 
     return node;
@@ -226,6 +240,7 @@ static Node* return_statement() {
     eatKind(TK_RETURN);
     Node* node = newNode(token, N_RETURN);
     node->Return.expr = expr();
+    node->type = node->Return.expr->type;
     return node;
 }
 
@@ -238,6 +253,7 @@ static Node* if_statement() {
 
     eatKind(TK_LPAREN);
     node->If.expr = expr();
+    node->type = node->If.expr->type;
     eatKind(TK_RPAREN);
 
     node->If.true_statement = statement();
@@ -262,6 +278,7 @@ static Node* while_statement() {
 
     eatKind(TK_LPAREN);
     node->While.expr = expr();
+    node->type = node->While.expr->type;
     eatKind(TK_RPAREN);
 
     node->While.loop_statement = statement();
@@ -316,6 +333,8 @@ static Node* var_decl() {
     scopeAddSymbol(symbol);
 
     node->VarDecl.symbol = symbol;
+    node->type = symbol->type;
+    
     eatKind(TK_ID);
     return node;
 }
@@ -326,6 +345,7 @@ static Node* block() {
     enterNewScope();
 
     Node* node = newNode(curToken, N_BLOCK);
+    node->type = &typeVoid;
     eatKind(TK_LBRACE);
     while (!peek(TK_RBRACE)) {
         if (peek(TK_TYPE)) {
@@ -350,6 +370,7 @@ static Node* function_decl() {
 
     Type* symbolType = type();
     Node* node = newNode(curToken, N_FUNC_DECL);
+    node->type = symbolType;
     eatKind(TK_ID);
     eatKind(TK_LPAREN);
 
@@ -363,7 +384,6 @@ static Node* function_decl() {
 
     eatKind(TK_RPAREN);
 
-    node->FunctionDecl.returnType = symbolType;
     node->FunctionDecl.block = block();
 
     exitScope();
