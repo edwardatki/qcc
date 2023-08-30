@@ -9,7 +9,7 @@
 int main(int argc, char **argv) {
     char* input_filename;
     char* output_filename;
-
+    
     // Process arguments
     int i = 1;
     while (i < argc) {
@@ -23,17 +23,12 @@ int main(int argc, char **argv) {
             i += 1;
         }
     }
-
-    // Open input file
+    
     if (input_filename == NULL) error(NULL, "no input file supplied");
-    FILE *input_file;
-    input_file = fopen(input_filename, "r");
-    if (!input_file) error(NULL, "unable to open file '%s'", input_filename);
 
     // Lex
-    Token* first_token = lex(input_file);
-    fclose(input_file);
-
+    Token* first_token = lex(input_filename);
+    
     // Parse
     Node* root_node = parse(first_token);
     

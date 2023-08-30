@@ -3,10 +3,12 @@
 #include <string.h>
 #include <ctype.h>
 #include "lexer.h"
+#include "messages.h"
 #include "symbol.h"
 #include "type.h"
 
-static Token* curToken;
+char* filename;
+Token* curToken;
 
 int currentLine = 1;
 int currentColumn = 0;
@@ -22,6 +24,9 @@ static void addToken(enum TokenKind kind, char* value, int line, int column) {
     curToken->next = token;
     curToken->kind = kind;
     curToken->value = value;
+    curToken->filename = filename;
+    if (value != NULL) curToken->length = strlen(value);
+    else curToken->length = 0;
     curToken->line = line;
     curToken->column = column;
     curToken = token;
@@ -43,6 +48,23 @@ static int isWhitespace(char c) {
     if (c == ' ') return 1;
     if (c == '\t') return 1;
     return 0;
+}
+
+char* get_line(int index) {
+    FILE *fp = fopen(filename, "r");
+    char* line = calloc(100, sizeof(char));
+
+    int i = 1;
+    while (fgets(line, 100, fp) != NULL) {
+        if (i == index) {
+            fseek(fp, 0, SEEK_SET);
+            return line;
+        }
+        i++;
+    }
+
+    fclose(fp);
+    return line;
 }
 
 static void checkNumeric(FILE* fp, char c) {
@@ -85,13 +107,20 @@ static void checkKeyword(FILE* fp, char c) {
     else addToken(TK_ID, value, currentLine, startColumn);
 }
 
-Token* lex(FILE* fp) {
+// TODO Things could be easier if we just read the whole file into memory
+// Token values could just point into the file data and we add a length variable
+Token* lex(char* _filename) {
+    filename = _filename;
+
+    FILE *fp = fopen(filename, "r");
+    if (!fp) error(NULL, "unable to open file '%s'", filename);
+
     Token* firstToken = newToken(TK_END);
     curToken = firstToken;
 
     while (1) {
         char c = next(fp);
-        
+
         // Track line number
         if (c =='\n') {
             currentLine++;
@@ -142,5 +171,7 @@ Token* lex(FILE* fp) {
         if (isalpha(c)) {checkKeyword(fp, c); continue;}
     }
 
+    fclose(fp);
+    
     return firstToken;
 }
