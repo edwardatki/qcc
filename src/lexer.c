@@ -1,5 +1,10 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
 #include "lexer.h"
 #include "symbol.h"
+#include "type.h"
 
 static Token* curToken;
 

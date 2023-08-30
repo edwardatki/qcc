@@ -1,12 +1,17 @@
 #ifndef _PARSER_H
 #define _PARSER_H
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include "lexer.h"
-#include "symbol.h"
-#include "scope.h"
+struct Token;
+typedef struct Token Token;
+
+struct Symbol;
+typedef struct Symbol Symbol;
+
+struct Type;
+typedef struct Type Type;
+
+struct Scope;
+typedef struct Scope Scope;
 
 enum NodeKind {N_TYPE, N_VAR_DECL, N_FUNC_DECL, N_BLOCK, N_VARIABLE, N_NUMBER, N_ASSIGNMENT, N_BINOP, N_UNARY, N_RETURN, N_IF, N_WHILE};
 

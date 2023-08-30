@@ -1,5 +1,5 @@
-#ifndef _PRINT_FORMATTING_H
-#define __PRINT_FORMATTING_H
+#ifndef __MESSAGES_H
+#define __MESSAGES_H
 
 #define RED   "\x1B[31m"
 #define GRN   "\x1B[32m"
@@ -9,5 +9,11 @@
 #define CYN   "\x1B[36m"
 #define WHT   "\x1B[37m"
 #define RESET "\x1B[0m"
+
+struct Token;
+typedef struct Token Token;
+
+void error(Token*, const char* format, ...);
+void warning(Token*, const char* format, ...);
 
 #endif

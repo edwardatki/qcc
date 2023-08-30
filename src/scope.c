@@ -1,5 +1,11 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include "lexer.h"
+#include "messages.h"
 #include "scope.h"
-#include "print_formatting.h"
+#include "symbol.h"
+#include "type.h"
 
 static Scope* currentScope = NULL;
 static int scopeCount = 0;
@@ -82,8 +88,7 @@ Symbol* lookupSymbol(Token* token) {
         searchScope = searchScope->parentScope;
     }
 
-    printf("%d:%d %serror:%s '%s' undeclared\n", token->line, token->column, RED, RESET, token->value);
-    exit(EXIT_FAILURE);
+    error(token, "'%s' undeclared", token->value);
 }
 
 int getSymbolStackOffset(Symbol* symbol, Scope* scope) {

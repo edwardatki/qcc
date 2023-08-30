@@ -1,24 +1,51 @@
+#include <stdlib.h>
 #include <stdio.h>
-#include "lexer.h"
-#include "parser.h"
+#include <string.h>
 #include "generator.h"
-#include "print_formatting.h"
+#include "lexer.h"
+#include "messages.h"
+#include "parser.h"
 
-int main() {
-    FILE *fp;
-    fp = fopen("test.s", "r");
+int main(int argc, char **argv) {
+    char* input_filename;
+    char* output_filename;
+
+    // Process arguments
+    int i = 1;
+    while (i < argc) {
+        if (strcmp(argv[i], "-o") == 0) {
+            if (argc <= (i+1)) error(NULL, "flag given with no value");
+            output_filename = argv[i+1];
+            i += 2;
+        } else {
+            if (input_filename != NULL) error(NULL, "more than one input file supplied");
+            input_filename = argv[i];
+            i += 1;
+        }
+    }
+
+    // Open input file
+    if (input_filename == NULL) error(NULL, "no input file supplied");
+    FILE *input_file;
+    input_file = fopen(input_filename, "r");
+    if (!input_file) error(NULL, "unable to open file '%s'", input_filename);
+
+    // Lex
+    Token* first_token = lex(input_file);
+    fclose(input_file);
+
+    // Parse
+    Node* root_node = parse(first_token);
     
-    Token* firstToken = lex(fp);
+    // Generate code
+    char* result = generate(root_node);
 
-    Node* rootNode = parse(firstToken);
-    
-    char* result = generate(rootNode);
-    // printf("\n--- OUTPUT ---\n");
-    // printf("%s", result);
+    // Write to output file
+    if (output_filename == NULL) output_filename = "out.asm";
+    FILE *output_file;
+    output_file = fopen(output_filename, "w");
+    fprintf(output_file, "%s", result);
+    fclose(output_file);
 
-    FILE *outputFile;
-    outputFile = fopen("test.asm", "w");
-    fprintf(outputFile, "%s", result);
-
-    return 0;
+    return EXIT_SUCCESS;
 }

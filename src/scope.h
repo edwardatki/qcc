@@ -1,7 +1,11 @@
 #ifndef _SCOPE_H
 #define _SCOPE_H
 
-#include "symbol.h"
+struct Symbol;
+typedef struct Symbol Symbol;
+
+struct Token;
+typedef struct Token Token;
 
 typedef struct Scope Scope;
 typedef struct SymbolListEntry SymbolListEntry;

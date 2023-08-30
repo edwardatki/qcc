@@ -1,10 +1,8 @@
 #ifndef _GENERATOR_H
 #define _GENERATOR_H
 
-#include <stdlib.h>
-#include <stdio.h>
-#include "lexer.h"
-#include "parser.h"
+struct Node;
+typedef struct Node Node;
 
 char* generate(Node*);
 

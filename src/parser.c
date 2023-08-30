@@ -1,5 +1,12 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include "lexer.h"
+#include "messages.h"
 #include "parser.h"
-#include "print_formatting.h"
+#include "scope.h"
+#include "symbol.h"
+#include "type.h"
 
 static Token* curToken;
 
@@ -15,10 +22,8 @@ static int peek2(enum TokenKind kind) {
 }
 
 static void eat() {
-    // printf("%s\n", curToken->value);
     if (curToken->kind == TK_END) {
-        printf("Unexpected end of tokens\n");
-        exit(EXIT_FAILURE);
+        error(curToken, "unexpected end of tokens");
     }
     curToken = curToken->next;
 }
@@ -26,10 +31,8 @@ static void eat() {
 
 static void eatKind(enum TokenKind kind) {
     char* messages[] = {"EOF", "'('", "')'", "'{'", "'}'", "','" "','", "'+'", "'-'", "'*'", "'/'", "'='", "a literal", "keyword 'return'", "an identifier", "a type", "';'", "keyword 'if'", "keyword 'else'", "'>'", "'<'", "'>='", "'<='", "'=='", "'!='", "keyword 'while'", "'&'"};
-    // printf("%s %s %s\n", messages[curToken->kind], (curToken->kind == kind) ? "==" : "!=", messages[kind]);
     if (curToken->kind != kind) {
-        printf("%d:%d %serror:%s expected %s but got %s\n", curToken->line, curToken->column, RED, RESET, messages[kind], messages[curToken->kind]);
-        exit(EXIT_FAILURE);
+        error(curToken, "expected %s but got %s", messages[kind], messages[curToken->kind]);
     }
     eat();
 }
@@ -40,8 +43,7 @@ static Type* getSymbolType(Token* token) {
     }
 
     // Pretty sure this error can never be reached as it wouldn't get through the lexer
-    printf("%d:%d %serror:%s unknown type '%s'\n", curToken->line, curToken->column, RED, RESET, token->value);
-    exit(EXIT_FAILURE);
+    error(curToken, "unknown type '%s'", token->value);
 }
 
 static void addNodeListEntry(NodeListEntry** rootEntry, Node* entryNode) {
@@ -82,12 +84,25 @@ static Node* assignment () {
     variableNode->Variable.symbol = lookupSymbol(curToken);
     variableNode->type = variableNode->Variable.symbol->type;
 
-    Token* token = curToken;
     eat(TK_ID);
+    Token* token = curToken;
     eat(TK_ASSIGN);
     Node* node = newNode(token, N_ASSIGNMENT);
     node->Assignment.variable = variableNode;
     node->Assignment.expr = expr();
+
+    // Throw error if types don't match
+    if (node->Assignment.expr->type->kind != variableNode->Variable.symbol->type->kind) {
+        error(node->token, "cannot assign '%s' to variable of type '%s'", node->Assignment.expr->type->name, variableNode->Variable.symbol->type->name);
+    }
+
+    // Warn about changing pointer type
+    if ((node->Assignment.expr->type->base != NULL) && (variableNode->Variable.symbol->type->base != NULL)) {
+        if (strcmp(node->Assignment.expr->type->base->name, variableNode->Variable.symbol->type->base->name) != 0) {
+            warning(node->token, "assignment of incompatible pointer types");
+        }
+    }
+
     node->type = variableNode->Variable.symbol->type;
 
     return node;
@@ -122,8 +137,7 @@ static Node* factor () {
         // Must be a pointer to be dereferenced
         if (mustBePointer) {
             if (variableNode->Variable.symbol->type->kind != TY_POINTER) {
-                printf("%d:%d %serror:%s left must be a pointer\n", variableNode->token->line, variableNode->token->column, RED, RESET);
-                exit(EXIT_FAILURE);
+                error(variableNode->token, "left must be a pointer");
             }
         }
 

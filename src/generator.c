@@ -1,7 +1,14 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include "generator.h"
+#include "lexer.h"
+#include "messages.h"
+#include "parser.h"
 #include "register.h"
 #include "scope.h"
-#include "print_formatting.h"
+#include "symbol.h"
+#include "type.h"
 
 static void visitVarDecl(Node*, int);
 static void visitFuncDecl(Node*, int);
@@ -47,7 +54,6 @@ static Register* allocReg(int size) {
         }
     }
 
-    printf("%serror:%s unable to allocate %d byte register\n", RED, RESET, size);
     printf("a: %s\n", registers[0].free ? GRN "free" RESET : RED "used" RESET);
     printf("b: %s\n", registers[1].free ? GRN "free" RESET : RED "used" RESET);
     printf("c: %s\n", registers[2].free ? GRN "free" RESET : RED "used" RESET);
@@ -55,7 +61,7 @@ static Register* allocReg(int size) {
     printf("e: %s\n", registers[4].free ? GRN "free" RESET : RED "used" RESET);
     printf("bc: %s\n", registers[5].free ? GRN "free" RESET : RED "used" RESET);
     printf("de: %s\n", registers[6].free ? GRN "free" RESET : RED "used" RESET);
-    exit(EXIT_FAILURE);
+    error(NULL, "unable to allocate register of size %d", size);
 }
 
 static void freeReg(Register* reg) {
@@ -205,8 +211,7 @@ static Register* visitBinOp(Node* node, int depth) {
 
     // Can only do 8-bit operations for now
     if ((regL->size > 1) | (regR->size > 1)) {
-        printf("%d:%d %serror:%s only 8-bit operations supported\n", node->UnaryOp.left->token->line,node->UnaryOp.left->token->column, RED, RESET);
-        exit(EXIT_FAILURE);
+        error(node->UnaryOp.left->token, "only 8-bit operations supported for now");
     }
 
     // Push accumulator if necessary
@@ -343,8 +348,7 @@ static Register* visitUnaryOp(Node* node, int depth) {
 
         // Can only do 8-bit operations for now
         if (regL->size > 1) {
-            printf("%d:%d %serror:%s only 8-bit operations supported\n", node->UnaryOp.left->token->line,node->UnaryOp.left->token->column, RED, RESET);
-            exit(EXIT_FAILURE);
+            error(node->UnaryOp.left->token, "only 8-bit operations supported for now");
         }
 
         // Move left out of accumulator if necessary

@@ -1,8 +1,11 @@
 #ifndef _SYMBOL_H
 #define _SYMBOL_H
 
-#include "lexer.h"
-#include "type.h"
+struct Token;
+typedef struct Token Token;
+
+struct Type;
+typedef struct Type Type;
 
 typedef struct Symbol Symbol;
 
