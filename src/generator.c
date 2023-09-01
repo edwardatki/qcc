@@ -10,44 +10,44 @@
 #include "symbol.h"
 #include "type.h"
 
-static void visitVarDecl(Node*, int);
-static void visitFuncDecl(Node*, int);
-static void visitBlock(Node*, int);
-static Register* visitNumber(Node*, int);
-static Register* visitVariable(Node*, int);
-static void visitAssignment(Node*, int);
-static Register* visitBinop(Node*, int);
-static void visitReturn(Node*, int);
-static Register* visit(Node*, int);
+static void visit_var_decl(struct Node*, int);
+static void visit_func_decl(struct Node*, int);
+static void visit_block(struct Node*, int);
+static struct Register* visit_number(struct Node*, int);
+static struct Register* visit_variable(struct Node*, int);
+static void visit_assignment(struct Node*, int);
+static struct Register* visit_bin_op(struct Node*, int);
+static void visit_return(struct Node*, int);
+static struct Register* visit(struct Node*, int);
 
-static char outputBuffer [1024];
-static char* outputPointer = outputBuffer;
+static char out_buffer [1024];
+static char* out_pointer = out_buffer;
 
-int localStackUsage = 0;
+int local_stack_usage = 0;
 
-static Register registers[] = { {.name="a", .size=1, .free=1, .subReg={NULL, NULL}},
-                                {.name="b", .size=1, .free=1, .subReg={NULL, NULL}},
-                                {.name="c", .size=1, .free=1, .subReg={NULL, NULL}},
-                                {.name="d", .size=1, .free=1, .subReg={NULL, NULL}},
-                                {.name="e", .size=1, .free=1, .subReg={NULL, NULL}},
-                                {.name="bc", .size=2, .free=1, .subReg={&registers[1], &registers[2]}},
-                                {.name="de", .size=2, .free=1, .subReg={&registers[3], &registers[4]}}};
+static struct Register registers[] = { {.name="a", .size=1, .free=1, .sub_reg={NULL, NULL}},
+                                    {.name="b", .size=1, .free=1, .sub_reg={NULL, NULL}},
+                                    {.name="c", .size=1, .free=1, .sub_reg={NULL, NULL}},
+                                    {.name="d", .size=1, .free=1, .sub_reg={NULL, NULL}},
+                                    {.name="e", .size=1, .free=1, .sub_reg={NULL, NULL}},
+                                    {.name="bc", .size=2, .free=1, .sub_reg={&registers[1], &registers[2]}},
+                                    {.name="de", .size=2, .free=1, .sub_reg={&registers[3], &registers[4]}}};
 
-static Register* allocReg(int size) {
-    for (int i = 0; i < sizeof(registers)/sizeof(Register); i++) {
+static struct Register* allocate_reg(int size) {
+    for (int i = 0; i < sizeof(registers)/sizeof(struct Register); i++) {
         // if (i == 0) continue; // TEMPORARY don't allocate a so we never have to push it to the stack
-        Register* reg = &registers[i];
+        struct Register* reg = &registers[i];
         if ((reg->size >= size) && reg->free) {
             // If sub registers are in use then can't allocate
-            if ((reg->subReg[0] != NULL) && !reg->subReg[0]->free) continue;
-            if ((reg->subReg[1] != NULL) && !reg->subReg[1]->free) continue;
+            if ((reg->sub_reg[0] != NULL) && !reg->sub_reg[0]->free) continue;
+            if ((reg->sub_reg[1] != NULL) && !reg->sub_reg[1]->free) continue;
 
             // Mark register as used
             reg->free = 0;
 
             // Mark sub registers as used too
-            if (reg->subReg[0] != NULL) reg->subReg[0]->free = 0;
-            if (reg->subReg[1] != NULL) reg->subReg[1]->free = 0;
+            if (reg->sub_reg[0] != NULL) reg->sub_reg[0]->free = 0;
+            if (reg->sub_reg[1] != NULL) reg->sub_reg[1]->free = 0;
 
             // printf("ALLOCATED REGISTER %s\n", reg->name);
             return reg;
@@ -64,492 +64,492 @@ static Register* allocReg(int size) {
     error(NULL, "unable to allocate register of size %d", size);
 }
 
-static void freeReg(Register* reg) {
+static void free_reg(struct Register* reg) {
     if (reg == NULL) return;
 
     // Mark register as free
     reg->free = 1;
 
     // Mark sub registers as free too
-    if (reg->subReg[0] != NULL) reg->subReg[0]->free = 1;
-    if (reg->subReg[1] != NULL) reg->subReg[1]->free = 1;
+    if (reg->sub_reg[0] != NULL) reg->sub_reg[0]->free = 1;
+    if (reg->sub_reg[1] != NULL) reg->sub_reg[1]->free = 1;
 
     // printf("FREED REGISTER %s\n", reg->name);
 }
 
-static void visitAll(NodeListEntry* listRoot, int depth) {
+static void visit_all(struct NodeListEntry* listRoot, int depth) {
     if (listRoot == NULL) return;
-    NodeListEntry* curEntry = listRoot;
-    while (curEntry->next != NULL) {
-        curEntry = curEntry->next;
-        Register* reg = visit(curEntry->node, depth);
-        freeReg(reg);   // Free registers that were allocated but never used for anything :(
+    struct NodeListEntry* current_entry = listRoot;
+    while (current_entry->next != NULL) {
+        current_entry = current_entry->next;
+        struct Register* reg = visit(current_entry->node, depth);
+        free_reg(reg);   // Free registers that were allocated but never used for anything :(
     }
 }
 
-static void printIndent(int depth) {
+static void print_indent(int depth) {
     for (int i = 0; i < depth; i++) {
         printf(" ");
     }
 }
 
-static void loadVariable(Register* reg, Scope* scope, Symbol* symbol) {
+static void load_variable(struct Register* reg, struct Scope* scope, struct Symbol* symbol) {
 
-    Register* pointerReg = allocReg(2);
-
-    if (symbol->global) {
-        outputPointer += sprintf(outputPointer, "\tmov %s, %s\n", pointerReg->name, symbol->token->value);
-    } else {
-        outputPointer += sprintf(outputPointer, "\tmov %s, sp+%d\n", pointerReg->name, getSymbolStackOffset(symbol, scope)+localStackUsage);
-    }
-    outputPointer += sprintf(outputPointer, "\tmov %s, [%s]\n", reg->name, pointerReg->name);  
-
-    freeReg(pointerReg);
-}
-
-static void storeVariable(Register* reg, Scope* scope, Symbol* symbol) {
-    Register* pointerReg = allocReg(2);
+    struct Register* pointer_reg = allocate_reg(2);
 
     if (symbol->global) {
-        outputPointer += sprintf(outputPointer, "\tmov %s, %s\n", pointerReg->name, symbol->token->value);
+        out_pointer += sprintf(out_pointer, "\tmov %s, %s\n", pointer_reg->name, symbol->token->value);
     } else {
-        outputPointer += sprintf(outputPointer, "\tmov %s, sp+%d\n", pointerReg->name, getSymbolStackOffset(symbol, scope)+localStackUsage);
+        out_pointer += sprintf(out_pointer, "\tmov %s, sp+%d\n", pointer_reg->name, get_symbol_stack_offset(symbol, scope)+local_stack_usage);
     }
-    outputPointer += sprintf(outputPointer, "\tmov [%s], %s\n", pointerReg->name, reg->name);  
+    out_pointer += sprintf(out_pointer, "\tmov %s, [%s]\n", reg->name, pointer_reg->name);  
 
-    freeReg(pointerReg);
+    free_reg(pointer_reg);
 }
 
-static char* getVariableLocation(Scope* scope, Symbol* symbol) {
+static void store_variable(struct Register* reg, struct Scope* scope, struct Symbol* symbol) {
+    struct Register* pointer_reg = allocate_reg(2);
+
+    if (symbol->global) {
+        out_pointer += sprintf(out_pointer, "\tmov %s, %s\n", pointer_reg->name, symbol->token->value);
+    } else {
+        out_pointer += sprintf(out_pointer, "\tmov %s, sp+%d\n", pointer_reg->name, get_symbol_stack_offset(symbol, scope)+local_stack_usage);
+    }
+    out_pointer += sprintf(out_pointer, "\tmov [%s], %s\n", pointer_reg->name, reg->name);  
+
+    free_reg(pointer_reg);
+}
+
+static char* get_variable_location(struct Scope* scope, struct Symbol* symbol) {
     if (symbol->global) {
         return symbol->token->value;
     } else {
         char* location = calloc(32, sizeof(char));
-        sprintf(location, "sp+%d", getSymbolStackOffset(symbol, scope)+localStackUsage);
+        sprintf(location, "sp+%d", get_symbol_stack_offset(symbol, scope)+local_stack_usage);
         return location;
     }
 }
 
-static void visitVarDecl(Node* node, int depth) {
-    printIndent(depth);
+static void visit_var_decl(struct Node* node, int depth) {
+    print_indent(depth);
     printf("Variable declaration: %s %s\n", node->VarDecl.symbol->type->name, node->VarDecl.symbol->token->value);
     
-    Symbol* symbol = node->VarDecl.symbol;
+    struct Symbol* symbol = node->VarDecl.symbol;
 
     // Will need to reserve space for global variables and track local variable's positions on the stack
 }
 
-static void visitFuncDecl(Node* node, int depth) {
+static void visit_func_decl(struct Node* node, int depth) {
     // Only bother with main for now
     if (strcmp(node->token->value, "main") != 0) return;
 
-    printIndent(depth);
+    print_indent(depth);
     printf("Function declaration: %s %s\n", node->type->name, node->token->value);
 
-    outputPointer += sprintf(outputPointer, "%s:\n", node->token->value);
+    out_pointer += sprintf(out_pointer, "%s:\n", node->token->value);
 
-    visitAll(node->FunctionDecl.formalParameters, depth+1);
+    visit_all(node->FunctionDecl.formal_parameters, depth+1);
     visit(node->FunctionDecl.block, depth+1);
 
-    outputPointer += sprintf(outputPointer, ".%s_exit:\n", node->token->value);
-    outputPointer += sprintf(outputPointer, "\tret\n\n");
+    out_pointer += sprintf(out_pointer, ".%s_exit:\n", node->token->value);
+    out_pointer += sprintf(out_pointer, "\tret\n\n");
 }
 
-static void visitBlock(Node* node, int depth) {
-    printIndent(depth);
+static void visit_block(struct Node* node, int depth) {
+    print_indent(depth);
     printf("Block\n");
 
     // Allocate stack space
-    if (node->scope->stackSize != 0) outputPointer += sprintf(outputPointer, "\tmov sp, sp-%d\n", node->scope->stackSize);
+    if (node->scope->stack_size != 0) out_pointer += sprintf(out_pointer, "\tmov sp, sp-%d\n", node->scope->stack_size);
 
-    visitAll(node->Block.variableDeclarations, depth+1);
-    visitAll(node->Block.statements, depth+1);
+    visit_all(node->Block.variable_declarations, depth+1);
+    visit_all(node->Block.statements, depth+1);
 
     // Deallocate
-    if (node->scope->stackSize != 0) outputPointer += sprintf(outputPointer, "\tmov sp, sp+%d\n", node->scope->stackSize);
+    if (node->scope->stack_size != 0) out_pointer += sprintf(out_pointer, "\tmov sp, sp+%d\n", node->scope->stack_size);
 }
 
-static Register* visitNumber(Node* node, int depth) {
-    printIndent(depth);
+static struct Register* visit_number(struct Node* node, int depth) {
+    print_indent(depth);
     printf("Number: %s\n", node->token->value);
 
-    Register* reg = allocReg(1);
-    outputPointer += sprintf(outputPointer, "\tmov %s, %s\n", reg->name, node->token->value);
+    struct Register* reg = allocate_reg(1);
+    out_pointer += sprintf(out_pointer, "\tmov %s, %s\n", reg->name, node->token->value);
     return reg;
 }
 
-static Register* visitVariable(Node* node, int depth) {
-    printIndent(depth);
+static struct Register* visit_variable(struct Node* node, int depth) {
+    print_indent(depth);
     printf("Variable: %s\n", node->token->value);
 
-    Register* reg = allocReg(1);
-    Symbol* symbol = node->Variable.symbol;
+    struct Register* reg = allocate_reg(1);
+    struct Symbol* symbol = node->Variable.symbol;
 
-    loadVariable(reg, node->scope, symbol);
+    load_variable(reg, node->scope, symbol);
 
     return reg;
 }
 
-static void visitAssignment(Node* node, int depth) {
-    printIndent(depth);
+static void visit_assignment(struct Node* node, int depth) {
+    print_indent(depth);
     printf("Assignment: %s\n", node->token->value);
 
-    Register* reg = visit(node->Assignment.expr, depth+1);
-    Symbol* symbol = node->Assignment.variable->Variable.symbol;
+    struct Register* reg = visit(node->Assignment.expr, depth+1);
+    struct Symbol* symbol = node->Assignment.variable->Variable.symbol;
 
-    storeVariable(reg, node->scope, symbol);
+    store_variable(reg, node->scope, symbol);
     
-    freeReg(reg);
+    free_reg(reg);
 }
 
-static Register* visitBinOp(Node* node, int depth) {
-    printIndent(depth);
+static struct Register* visit_bin_op(struct Node* node, int depth) {
+    print_indent(depth);
     printf("BinOp: %s\n", node->token->value);
 
-    Register* regL = visit(node->BinOp.left, depth+1);
-    Register* regR = visit(node->BinOp.right, depth+1);
+    struct Register* left_reg = visit(node->BinOp.left, depth+1);
+    struct Register* right_reg = visit(node->BinOp.right, depth+1);
 
     // Can only do 8-bit operations for now
-    if ((regL->size > 1) | (regR->size > 1)) {
+    if ((left_reg->size > 1) | (right_reg->size > 1)) {
         error(node->UnaryOp.left->token, "only 8-bit operations supported for now");
     }
 
     // Push accumulator if necessary
-    if ((strcmp(regL->name, "a") != 0) && (!registers[0].free)) {
-        outputPointer += sprintf(outputPointer, "\tpush a\n");
-        localStackUsage += 1;
+    if ((strcmp(left_reg->name, "a") != 0) && (!registers[0].free)) {
+        out_pointer += sprintf(out_pointer, "\tpush a\n");
+        local_stack_usage += 1;
     }
 
     // Move left into accumulator if necessary
-    if (strcmp(regL->name, "a") != 0) outputPointer += sprintf(outputPointer, "\tmov a, %s\n", regL->name);
+    if (strcmp(left_reg->name, "a") != 0) out_pointer += sprintf(out_pointer, "\tmov a, %s\n", left_reg->name);
 
     // Perform operation
     if (strcmp(node->token->value, "+") == 0) {
-        outputPointer += sprintf(outputPointer, "\tadd %s\n", regR->name);
+        out_pointer += sprintf(out_pointer, "\tadd %s\n", right_reg->name);
     } else if (strcmp(node->token->value, "-") == 0) {
-        outputPointer += sprintf(outputPointer, "\tsub %s\n", regR->name);
+        out_pointer += sprintf(out_pointer, "\tsub %s\n", right_reg->name);
     } else if (strcmp(node->token->value, ">") == 0) {
-        static int labelCounter = 0;
+        static int label_count = 0;
         
-        outputPointer += sprintf(outputPointer, "\tcmp %s\n", regR->name);
-        outputPointer += sprintf(outputPointer, "\tjnc .cmp_more_false_%d\n", labelCounter); // A <= right
+        out_pointer += sprintf(out_pointer, "\tcmp %s\n", right_reg->name);
+        out_pointer += sprintf(out_pointer, "\tjnc .cmp_more_false_%d\n", label_count); // A <= right
 
-        outputPointer += sprintf(outputPointer, ".cmp_more_true_%d:\n", labelCounter);
-        outputPointer += sprintf(outputPointer, "\tmov a, 1\n");
-        outputPointer += sprintf(outputPointer, "\tjmp .cmp_more_exit_%d\n", labelCounter);
+        out_pointer += sprintf(out_pointer, ".cmp_more_true_%d:\n", label_count);
+        out_pointer += sprintf(out_pointer, "\tmov a, 1\n");
+        out_pointer += sprintf(out_pointer, "\tjmp .cmp_more_exit_%d\n", label_count);
 
-        outputPointer += sprintf(outputPointer, ".cmp_more_false_%d:\n", labelCounter);
-        outputPointer += sprintf(outputPointer, "\tmov a, 0\n");
+        out_pointer += sprintf(out_pointer, ".cmp_more_false_%d:\n", label_count);
+        out_pointer += sprintf(out_pointer, "\tmov a, 0\n");
 
-        outputPointer += sprintf(outputPointer, ".cmp_more_exit_%d:\n", labelCounter);
+        out_pointer += sprintf(out_pointer, ".cmp_more_exit_%d:\n", label_count);
 
-        labelCounter++;
+        label_count++;
     } else if (strcmp(node->token->value, "<") == 0) {
-        static int labelCounter = 0;
+        static int label_count = 0;
         
-        outputPointer += sprintf(outputPointer, "\tcmp %s\n", regR->name);
-        outputPointer += sprintf(outputPointer, "\tjc .cmp_less_false_%d\n", labelCounter);  // A > right
-        outputPointer += sprintf(outputPointer, "\tje .cmp_less_false_%d\n", labelCounter);  // A == right
+        out_pointer += sprintf(out_pointer, "\tcmp %s\n", right_reg->name);
+        out_pointer += sprintf(out_pointer, "\tjc .cmp_less_false_%d\n", label_count);  // A > right
+        out_pointer += sprintf(out_pointer, "\tje .cmp_less_false_%d\n", label_count);  // A == right
 
-        outputPointer += sprintf(outputPointer, ".cmp_less_true_%d:\n", labelCounter);
-        outputPointer += sprintf(outputPointer, "\tmov a, 1\n");
-        outputPointer += sprintf(outputPointer, "\tjmp .cmp_less_exit_%d\n", labelCounter);
+        out_pointer += sprintf(out_pointer, ".cmp_less_true_%d:\n", label_count);
+        out_pointer += sprintf(out_pointer, "\tmov a, 1\n");
+        out_pointer += sprintf(out_pointer, "\tjmp .cmp_less_exit_%d\n", label_count);
 
-        outputPointer += sprintf(outputPointer, ".cmp_less_false_%d:\n", labelCounter);
-        outputPointer += sprintf(outputPointer, "\tmov a, 0\n");
+        out_pointer += sprintf(out_pointer, ".cmp_less_false_%d:\n", label_count);
+        out_pointer += sprintf(out_pointer, "\tmov a, 0\n");
 
-        outputPointer += sprintf(outputPointer, ".cmp_less_exit_%d:\n", labelCounter);
+        out_pointer += sprintf(out_pointer, ".cmp_less_exit_%d:\n", label_count);
     } else if (strcmp(node->token->value, ">=") == 0) {
-        static int labelCounter = 0;
+        static int label_count = 0;
         
-        outputPointer += sprintf(outputPointer, "\tcmp %s\n", regR->name);
-        outputPointer += sprintf(outputPointer, "\tjne .cmp_more_equal_true_%d\n", labelCounter); // A == right
-        outputPointer += sprintf(outputPointer, "\tjnc .cmp_more_equal_false_%d\n", labelCounter); // A <= right
+        out_pointer += sprintf(out_pointer, "\tcmp %s\n", right_reg->name);
+        out_pointer += sprintf(out_pointer, "\tjne .cmp_more_equal_true_%d\n", label_count); // A == right
+        out_pointer += sprintf(out_pointer, "\tjnc .cmp_more_equal_false_%d\n", label_count); // A <= right
 
-        outputPointer += sprintf(outputPointer, ".cmp_more_equal_true_%d:\n", labelCounter);
-        outputPointer += sprintf(outputPointer, "\tmov a, 1\n");
-        outputPointer += sprintf(outputPointer, "\tjmp .cmp_more_exit_%d\n", labelCounter);
+        out_pointer += sprintf(out_pointer, ".cmp_more_equal_true_%d:\n", label_count);
+        out_pointer += sprintf(out_pointer, "\tmov a, 1\n");
+        out_pointer += sprintf(out_pointer, "\tjmp .cmp_more_exit_%d\n", label_count);
 
-        outputPointer += sprintf(outputPointer, ".cmp_more_equal_false_%d:\n", labelCounter);
-        outputPointer += sprintf(outputPointer, "\tmov a, 0\n");
+        out_pointer += sprintf(out_pointer, ".cmp_more_equal_false_%d:\n", label_count);
+        out_pointer += sprintf(out_pointer, "\tmov a, 0\n");
 
-        outputPointer += sprintf(outputPointer, ".cmp_more_equal_exit_%d:\n", labelCounter);
+        out_pointer += sprintf(out_pointer, ".cmp_more_equal_exit_%d:\n", label_count);
     } else if (strcmp(node->token->value, "<=") == 0) {
-        static int labelCounter = 0;
+        static int label_count = 0;
         
-        outputPointer += sprintf(outputPointer, "\tcmp %s\n", regR->name);
-        outputPointer += sprintf(outputPointer, "\tjc .cmp_less_equal_false_%d\n", labelCounter); // A > right
+        out_pointer += sprintf(out_pointer, "\tcmp %s\n", right_reg->name);
+        out_pointer += sprintf(out_pointer, "\tjc .cmp_less_equal_false_%d\n", label_count); // A > right
 
-        outputPointer += sprintf(outputPointer, ".cmp_less_equal_true_%d:\n", labelCounter);
-        outputPointer += sprintf(outputPointer, "\tmov a, 1\n");
-        outputPointer += sprintf(outputPointer, "\tjmp .cmp_less_equal_exit_%d\n", labelCounter);
+        out_pointer += sprintf(out_pointer, ".cmp_less_equal_true_%d:\n", label_count);
+        out_pointer += sprintf(out_pointer, "\tmov a, 1\n");
+        out_pointer += sprintf(out_pointer, "\tjmp .cmp_less_equal_exit_%d\n", label_count);
 
-        outputPointer += sprintf(outputPointer, ".cmp_less_equal_false_%d:\n", labelCounter);
-        outputPointer += sprintf(outputPointer, "\tmov a, 0\n");
+        out_pointer += sprintf(out_pointer, ".cmp_less_equal_false_%d:\n", label_count);
+        out_pointer += sprintf(out_pointer, "\tmov a, 0\n");
 
-        outputPointer += sprintf(outputPointer, ".cmp_less_equal_exit_%d:\n", labelCounter);
+        out_pointer += sprintf(out_pointer, ".cmp_less_equal_exit_%d:\n", label_count);
     } else if (strcmp(node->token->value, "==") == 0) {
-        static int labelCounter = 0;
+        static int label_count = 0;
         
-        outputPointer += sprintf(outputPointer, "\tcmp %s\n", regR->name);
-        outputPointer += sprintf(outputPointer, "\tjne .cmp_equal_false_%d\n", labelCounter); // A != right
+        out_pointer += sprintf(out_pointer, "\tcmp %s\n", right_reg->name);
+        out_pointer += sprintf(out_pointer, "\tjne .cmp_equal_false_%d\n", label_count); // A != right
 
-        outputPointer += sprintf(outputPointer, ".cmp_equal_true_%d:\n", labelCounter);
-        outputPointer += sprintf(outputPointer, "\tmov a, 1\n");
-        outputPointer += sprintf(outputPointer, "\tjmp .cmp_equal_exit_%d\n", labelCounter);
+        out_pointer += sprintf(out_pointer, ".cmp_equal_true_%d:\n", label_count);
+        out_pointer += sprintf(out_pointer, "\tmov a, 1\n");
+        out_pointer += sprintf(out_pointer, "\tjmp .cmp_equal_exit_%d\n", label_count);
 
-        outputPointer += sprintf(outputPointer, ".cmp_equal_false_%d:\n", labelCounter);
-        outputPointer += sprintf(outputPointer, "\tmov a, 0\n");
+        out_pointer += sprintf(out_pointer, ".cmp_equal_false_%d:\n", label_count);
+        out_pointer += sprintf(out_pointer, "\tmov a, 0\n");
 
-        outputPointer += sprintf(outputPointer, ".cmp_equal_exit_%d:\n", labelCounter);
+        out_pointer += sprintf(out_pointer, ".cmp_equal_exit_%d:\n", label_count);
     } else if (strcmp(node->token->value, "!=") == 0) {
-        static int labelCounter = 0;
+        static int label_count = 0;
         
-        outputPointer += sprintf(outputPointer, "\tcmp %s\n", regR->name);
-        outputPointer += sprintf(outputPointer, "\tje .cmp_not_equal_false_%d\n", labelCounter); // A != right
+        out_pointer += sprintf(out_pointer, "\tcmp %s\n", right_reg->name);
+        out_pointer += sprintf(out_pointer, "\tje .cmp_not_equal_false_%d\n", label_count); // A != right
 
-        outputPointer += sprintf(outputPointer, ".cmp_not_equal_true_%d:\n", labelCounter);
-        outputPointer += sprintf(outputPointer, "\tmov a, 1\n");
-        outputPointer += sprintf(outputPointer, "\tjmp .cmp_not_equal_exit_%d\n", labelCounter);
+        out_pointer += sprintf(out_pointer, ".cmp_not_equal_true_%d:\n", label_count);
+        out_pointer += sprintf(out_pointer, "\tmov a, 1\n");
+        out_pointer += sprintf(out_pointer, "\tjmp .cmp_not_equal_exit_%d\n", label_count);
 
-        outputPointer += sprintf(outputPointer, ".cmp_not_equal_false_%d:\n", labelCounter);
-        outputPointer += sprintf(outputPointer, "\tmov a, 0\n");
+        out_pointer += sprintf(out_pointer, ".cmp_not_equal_false_%d:\n", label_count);
+        out_pointer += sprintf(out_pointer, "\tmov a, 0\n");
 
-        outputPointer += sprintf(outputPointer, ".cmp_not_equal_exit_%d:\n", labelCounter);
+        out_pointer += sprintf(out_pointer, ".cmp_not_equal_exit_%d:\n", label_count);
     } else {
-        outputPointer += sprintf(outputPointer, "\t???\n");
+        out_pointer += sprintf(out_pointer, "\t???\n");
     }
     
-    freeReg(regR);
+    free_reg(right_reg);
 
     // Move result from accumulator back to left if necessary
-    if (strcmp(regL->name, "a") != 0) outputPointer += sprintf(outputPointer, "\tmov %s, a\n", regL->name);
+    if (strcmp(left_reg->name, "a") != 0) out_pointer += sprintf(out_pointer, "\tmov %s, a\n", left_reg->name);
 
     // Restore accumulator if necessary
-    if ((strcmp(regL->name, "a") != 0) && (!registers[0].free)) {
-        outputPointer += sprintf(outputPointer, "\tpop a\n");
-        localStackUsage -= 1;
+    if ((strcmp(left_reg->name, "a") != 0) && (!registers[0].free)) {
+        out_pointer += sprintf(out_pointer, "\tpop a\n");
+        local_stack_usage -= 1;
     }
 
-    return regL;
+    return left_reg;
 }
 
-static Register* visitUnaryOp(Node* node, int depth) {
-    printIndent(depth);
+static struct Register* visit_unary_op(struct Node* node, int depth) {
+    print_indent(depth);
     printf("UnaryOp: %s\n", node->token->value);
 
     // Perform operation
     if (strcmp(node->token->value, "+") == 0) {
         // Don't need to do anything here
-        Register* regL = visit(node->UnaryOp.left, depth+1);
-        return regL;
+        struct Register* left_reg = visit(node->UnaryOp.left, depth+1);
+        return left_reg;
     } else if (strcmp(node->token->value, "-") == 0) {
-        Register* regL = visit(node->UnaryOp.left, depth+1);
+        struct Register* left_reg = visit(node->UnaryOp.left, depth+1);
 
         // Can only do 8-bit operations for now
-        if (regL->size > 1) {
+        if (left_reg->size > 1) {
             error(node->UnaryOp.left->token, "only 8-bit operations supported for now");
         }
 
         // Move left out of accumulator if necessary
-        if (strcmp(regL->name, "a") == 0) {
-            regL = allocReg(1);
-            outputPointer += sprintf(outputPointer, "\tmov %s, a\n", regL->name);
-            outputPointer += sprintf(outputPointer, "\tmov a, 0\n");
-            outputPointer += sprintf(outputPointer, "\tsub %s\n", regL->name);
-            outputPointer += sprintf(outputPointer, "\tmov a, %s\n", regL->name);
-            freeReg(regL);
-            regL = &registers[0];
+        if (strcmp(left_reg->name, "a") == 0) {
+            left_reg = allocate_reg(1);
+            out_pointer += sprintf(out_pointer, "\tmov %s, a\n", left_reg->name);
+            out_pointer += sprintf(out_pointer, "\tmov a, 0\n");
+            out_pointer += sprintf(out_pointer, "\tsub %s\n", left_reg->name);
+            out_pointer += sprintf(out_pointer, "\tmov a, %s\n", left_reg->name);
+            free_reg(left_reg);
+            left_reg = &registers[0];
         } else {
-            outputPointer += sprintf(outputPointer, "\tmov a, 0\n");
-            outputPointer += sprintf(outputPointer, "\tsub %s\n", regL->name);
+            out_pointer += sprintf(out_pointer, "\tmov a, 0\n");
+            out_pointer += sprintf(out_pointer, "\tsub %s\n", left_reg->name);
         }
 
-        return regL;
+        return left_reg;
     } else if (strcmp(node->token->value, "*") == 0) {
-        Symbol* symbol = node->UnaryOp.left->Variable.symbol;
+        struct Symbol* symbol = node->UnaryOp.left->Variable.symbol;
 
         printf("%s\t", node->UnaryOp.left->type->name);
-        printIndent(depth+1);
+        print_indent(depth+1);
         printf("Variable: %s\n", symbol->token->value);
 
-        Register* regL = allocReg(symbol->type->base->size);
-        loadVariable(regL, node->scope, symbol);
+        struct Register* left_reg = allocate_reg(symbol->type->base->size);
+        load_variable(left_reg, node->scope, symbol);
         
-        return regL;
+        return left_reg;
     } else if (strcmp(node->token->value, "&") == 0) {
-        Symbol* symbol = node->UnaryOp.left->Variable.symbol;
+        struct Symbol* symbol = node->UnaryOp.left->Variable.symbol;
 
         printf("%s\t", node->UnaryOp.left->type->name);
-        printIndent(depth+1);
+        print_indent(depth+1);
         printf("Variable: %s\n", symbol->token->value);
 
-        Register* pointerReg = allocReg(pointerTo(symbol->type)->size);
-        outputPointer += sprintf(outputPointer, "\tmov %s, %s\n", pointerReg->name, getVariableLocation(node->scope, symbol));
+        struct Register* pointer_reg = allocate_reg(pointer_to(symbol->type)->size);
+        out_pointer += sprintf(out_pointer, "\tmov %s, %s\n", pointer_reg->name, get_variable_location(node->scope, symbol));
 
-        return pointerReg;
+        return pointer_reg;
     } else {
-        outputPointer += sprintf(outputPointer, "\t???\n");
+        out_pointer += sprintf(out_pointer, "\t???\n");
         return NULL;
     }
 }
 
-static void visitReturn(Node* node, int depth) {
-    printIndent(depth);
+static void visit_return(struct Node* node, int depth) {
+    print_indent(depth);
     printf("Return\n");
 
     // Get return value
-    Register* reg = visit(node->Return.expr, depth+1);
+    struct Register* reg = visit(node->Return.expr, depth+1);
 
     // Move return value to accumulator if necessary
-    if (strcmp(reg->name, "a") != 0) outputPointer += sprintf(outputPointer, "\tmov a, %s\n", reg->name);
+    if (strcmp(reg->name, "a") != 0) out_pointer += sprintf(out_pointer, "\tmov a, %s\n", reg->name);
 
     // TODO this needs account for returns from inside futher scopes
     // Restore stack
-    outputPointer += sprintf(outputPointer, "\tmov sp, sp+%d\n", node->scope->stackSize);
+    out_pointer += sprintf(out_pointer, "\tmov sp, sp+%d\n", node->scope->stack_size);
 
-    outputPointer += sprintf(outputPointer, "\tret\n");
-    freeReg(reg);
+    out_pointer += sprintf(out_pointer, "\tret\n");
+    free_reg(reg);
 }
 
-static void visitIf(Node* node, int depth) {
-    printIndent(depth);
+static void visit_if(struct Node* node, int depth) {
+    print_indent(depth);
     printf("If\n");
 
-    static int labelCounter = 0;
+    static int label_count = 0;
 
     // Get test value
-    Register* reg = visit(node->Return.expr, depth+1);
+    struct Register* reg = visit(node->Return.expr, depth+1);
 
     // Push accumulator if necessary
     if ((strcmp(reg->name, "a") != 0) && (!registers[0].free)) {
-        outputPointer += sprintf(outputPointer, "\tpush a\n");
-        localStackUsage += 1;
+        out_pointer += sprintf(out_pointer, "\tpush a\n");
+        local_stack_usage += 1;
     }
 
     // Move test value to accumulator if necessary
-    if (strcmp(reg->name, "a") != 0) outputPointer += sprintf(outputPointer, "\tmov a, %s\n", reg->name);
+    if (strcmp(reg->name, "a") != 0) out_pointer += sprintf(out_pointer, "\tmov a, %s\n", reg->name);
 
     // Compare
-    outputPointer += sprintf(outputPointer, "\tcmp 0\n");
+    out_pointer += sprintf(out_pointer, "\tcmp 0\n");
 
     // Restore accumulator if necessary
     if ((strcmp(reg->name, "a") != 0) && (!registers[0].free)) {
-        outputPointer += sprintf(outputPointer, "\tpop a\n");
-        localStackUsage -= 1;
+        out_pointer += sprintf(out_pointer, "\tpop a\n");
+        local_stack_usage -= 1;
     }
 
     // Jump if equal 0
-    outputPointer += sprintf(outputPointer, "\tje .if_false_%d\n", labelCounter);
-    freeReg(reg);
+    out_pointer += sprintf(out_pointer, "\tje .if_false_%d\n", label_count);
+    free_reg(reg);
 
     // Visit true branch
-    outputPointer += sprintf(outputPointer, ".if_true_%d:\n", labelCounter);
+    out_pointer += sprintf(out_pointer, ".if_true_%d:\n", label_count);
     visit(node->If.true_statement, depth+1);
-    outputPointer += sprintf(outputPointer, "\tjmp .if_exit_%d\n", labelCounter);
+    out_pointer += sprintf(out_pointer, "\tjmp .if_exit_%d\n", label_count);
 
     // Visit false branch
-    outputPointer += sprintf(outputPointer, ".if_false_%d:\n", labelCounter);
+    out_pointer += sprintf(out_pointer, ".if_false_%d:\n", label_count);
     if (node->If.false_statement != NULL) visit(node->If.false_statement, depth+1);
 
-    outputPointer += sprintf(outputPointer, ".if_exit_%d:\n", labelCounter);
+    out_pointer += sprintf(out_pointer, ".if_exit_%d:\n", label_count);
 
-    labelCounter++;
+    label_count++;
 }
 
-static void visitWhile(Node* node, int depth) {
-    printIndent(depth);
+static void visit_while(struct Node* node, int depth) {
+    print_indent(depth);
     printf("While\n");
 
-    static int labelCounter = 0;
+    static int label_count = 0;
 
-    outputPointer += sprintf(outputPointer, ".while_start_%d:\n", labelCounter);
+    out_pointer += sprintf(out_pointer, ".while_start_%d:\n", label_count);
 
     // Get test value
-    Register* reg = visit(node->Return.expr, depth+1);
+    struct Register* reg = visit(node->Return.expr, depth+1);
 
     // Push accumulator if necessary
     if ((strcmp(reg->name, "a") != 0) && (!registers[0].free)) {
-        outputPointer += sprintf(outputPointer, "\tpush a\n");
-        localStackUsage += 1;
+        out_pointer += sprintf(out_pointer, "\tpush a\n");
+        local_stack_usage += 1;
     }
 
     // Move test value to accumulator if necessary
-    if (strcmp(reg->name, "a") != 0) outputPointer += sprintf(outputPointer, "\tmov a, %s\n", reg->name);
+    if (strcmp(reg->name, "a") != 0) out_pointer += sprintf(out_pointer, "\tmov a, %s\n", reg->name);
 
     // Compare
-    outputPointer += sprintf(outputPointer, "\tcmp 0\n");
+    out_pointer += sprintf(out_pointer, "\tcmp 0\n");
 
     // Restore accumulator if necessary
     if ((strcmp(reg->name, "a") != 0) && (!registers[0].free)) {
-        outputPointer += sprintf(outputPointer, "\tpop a\n");
-        localStackUsage -= 1;
+        out_pointer += sprintf(out_pointer, "\tpop a\n");
+        local_stack_usage -= 1;
     }
 
     // Jump if equal 0
-    outputPointer += sprintf(outputPointer, "\tje .while_exit_%d\n", labelCounter);
-    freeReg(reg);
+    out_pointer += sprintf(out_pointer, "\tje .while_exit_%d\n", label_count);
+    free_reg(reg);
 
     // Visit loop statement
-    outputPointer += sprintf(outputPointer, ".while_contents_%d:\n", labelCounter);
+    out_pointer += sprintf(out_pointer, ".while_contents_%d:\n", label_count);
     visit(node->While.loop_statement, depth+1);
 
     // Go back to start of loop
-    outputPointer += sprintf(outputPointer, "\tjmp .while_start_%d\n", labelCounter);
+    out_pointer += sprintf(out_pointer, "\tjmp .while_start_%d\n", label_count);
 
-    outputPointer += sprintf(outputPointer, ".while_exit_%d:\n", labelCounter);
+    out_pointer += sprintf(out_pointer, ".while_exit_%d:\n", label_count);
 
-    labelCounter++;
+    label_count++;
 }
 
-static Register* visit(Node* node, int depth) {
+static struct Register* visit(struct Node* node, int depth) {
     printf("%s\t", node->type->name);
     switch (node->kind) {
         case N_VAR_DECL:
-            visitVarDecl(node, depth);
+            visit_var_decl(node, depth);
             return NULL;
         case N_FUNC_DECL:
-            visitFuncDecl(node, depth);
+            visit_func_decl(node, depth);
             return NULL;
         case N_BLOCK:
-            visitBlock(node, depth);
+            visit_block(node, depth);
             return NULL;
         case N_NUMBER:
-            return visitNumber(node, depth);
+            return visit_number(node, depth);
         case N_VARIABLE:
-            return visitVariable(node, depth);
+            return visit_variable(node, depth);
         case N_ASSIGNMENT:
-            visitAssignment(node, depth);
+            visit_assignment(node, depth);
             return NULL;
         case N_BINOP:
-            return visitBinOp(node, depth);
+            return visit_bin_op(node, depth);
         case N_UNARY:
-            return visitUnaryOp(node, depth);
+            return visit_unary_op(node, depth);
         case N_RETURN:
-            visitReturn(node, depth);
+            visit_return(node, depth);
             return NULL;
         case N_IF:
-            visitIf(node, depth);
+            visit_if(node, depth);
             return NULL;
         case N_WHILE:
-            visitWhile(node, depth);
+            visit_while(node, depth);
             return NULL;
     }
 
     return NULL;
 }
 
-char* generate(Node* rootNode) {
+char* generate(struct Node* root_node) {
     // Program entry code
-    outputPointer += sprintf(outputPointer, "#bank RAM\n\n");
-    outputPointer += sprintf(outputPointer, "mov sp, 0x7fff\n");
-    outputPointer += sprintf(outputPointer, "call main\n");
-    outputPointer += sprintf(outputPointer, "call print_u8_dec\n");
-    outputPointer += sprintf(outputPointer, "jmp $\n\n");
-    outputPointer += sprintf(outputPointer, "#include \"architecture.asm\"\n");
-    outputPointer += sprintf(outputPointer, "#include \"print_functions.asm\"\n\n");
+    out_pointer += sprintf(out_pointer, "#bank RAM\n\n");
+    out_pointer += sprintf(out_pointer, "mov sp, 0x7fff\n");
+    out_pointer += sprintf(out_pointer, "call main\n");
+    out_pointer += sprintf(out_pointer, "call print_u8_dec\n");
+    out_pointer += sprintf(out_pointer, "jmp $\n\n");
+    out_pointer += sprintf(out_pointer, "#include \"architecture.asm\"\n");
+    out_pointer += sprintf(out_pointer, "#include \"print_functions.asm\"\n\n");
 
-    visitFuncDecl(rootNode, 0);
+    visit_func_decl(root_node, 0);
     
-    return outputBuffer;
+    return out_buffer;
 }

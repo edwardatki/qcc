@@ -8,110 +8,110 @@
 #include "symbol.h"
 #include "type.h"
 
-static Token* curToken;
+static struct Token* current_token;
 
-static Node* block();
-static Node* statement();
+static struct Node* block();
+static struct Node* statement();
 
 static int peek(enum TokenKind kind) {
-    return curToken->kind == kind;
+    return current_token->kind == kind;
 }
 
 static int peek2(enum TokenKind kind) {
-    return curToken->next->kind == kind;
+    return current_token->next->kind == kind;
 }
 
 static void eat() {
-    if (curToken->kind == TK_END) {
-        error(curToken, "unexpected end of tokens");
+    if (current_token->kind == TK_END) {
+        error(current_token, "unexpected end of tokens");
     }
-    curToken = curToken->next;
+    current_token = current_token->next;
 }
 
 
-static void eatKind(enum TokenKind kind) {
+static void eat_kind(enum TokenKind kind) {
     char* messages[] = {"EOF", "'('", "')'", "'{'", "'}'", "','" "','", "'+'", "'-'", "'*'", "'/'", "'='", "a literal", "keyword 'return'", "an identifier", "a type", "';'", "keyword 'if'", "keyword 'else'", "'>'", "'<'", "'>='", "'<='", "'=='", "'!='", "keyword 'while'", "'&'"};
-    if (curToken->kind != kind) {
-        error(curToken, "expected %s but got %s", messages[kind], messages[curToken->kind]);
+    if (current_token->kind != kind) {
+        error(current_token, "expected %s but got %s", messages[kind], messages[current_token->kind]);
     }
     eat();
 }
 
-static Type* getSymbolType(Token* token) {
-    for (int i = 0; i < sizeof(baseTypes)/sizeof(baseTypes[0]); i++) {
-        if (strcmp(baseTypes[i]->name, token->value) == 0) return baseTypes[i];
+static struct Type* get_symbol_type(struct Token* token) {
+    for (int i = 0; i < sizeof(base_types)/sizeof(base_types[0]); i++) {
+        if (strcmp(base_types[i]->name, token->value) == 0) return base_types[i];
     }
 
     // Pretty sure this error can never be reached as it wouldn't get through the lexer
-    error(curToken, "unknown type '%s'", token->value);
+    error(current_token, "unknown type '%s'", token->value);
 }
 
-static void addNodeListEntry(NodeListEntry** rootEntry, Node* entryNode) {
-    if (*rootEntry == NULL) {
-        *rootEntry = calloc(1, sizeof(NodeListEntry));
+static void add_node_list_entry(struct NodeListEntry** root_entry, struct Node* entryNode) {
+    if (*root_entry == NULL) {
+        *root_entry = calloc(1, sizeof(struct NodeListEntry));
     }
 
-    NodeListEntry* curEntry = *rootEntry;
+    struct NodeListEntry* current_entry = *root_entry;
 
-    *rootEntry = curEntry;
+    *root_entry = current_entry;
  
     // Travel to end of list
-    while (curEntry->next != NULL) {
-        curEntry = curEntry->next;
+    while (current_entry->next != NULL) {
+        current_entry = current_entry->next;
     }
 
     // Create new entry
-    NodeListEntry* newEntry = calloc(1, sizeof(NodeListEntry));
-    newEntry->node = entryNode;
-    newEntry->next = NULL;
-    curEntry->next = newEntry;
+    struct NodeListEntry* new_entry = calloc(1, sizeof(struct NodeListEntry));
+    new_entry->node = entryNode;
+    new_entry->next = NULL;
+    current_entry->next = new_entry;
 }
 
-static Node* newNode(Token* token, enum NodeKind kind) {
-    Node* node = calloc(1, sizeof(Node));
+static struct Node* new_node(struct Token* token, enum NodeKind kind) {
+    struct Node* node = calloc(1, sizeof(struct Node));
     node->token = token;
     node->kind = kind;
-    node->scope = getCurrentScope();
+    node->scope = get_current_scope();
     return node;
 }
 
-static Node* expr();
+static struct Node* expr();
 
 // assignment : variable ASSIGN expr
-static Node* assignment () {
+static struct Node* assignment () {
     // Lookup symbol from current scope
-    Node* variableNode = newNode(curToken, N_VARIABLE);
-    variableNode->Variable.symbol = lookupSymbol(curToken);
-    variableNode->type = variableNode->Variable.symbol->type;
+    struct Node* variable_node = new_node(current_token, N_VARIABLE);
+    variable_node->Variable.symbol = lookup_symbol(current_token);
+    variable_node->type = variable_node->Variable.symbol->type;
 
     eat(TK_ID);
-    Token* token = curToken;
+    struct Token* token = current_token;
     eat(TK_ASSIGN);
-    Node* node = newNode(token, N_ASSIGNMENT);
-    node->Assignment.variable = variableNode;
+    struct Node* node = new_node(token, N_ASSIGNMENT);
+    node->Assignment.variable = variable_node;
     node->Assignment.expr = expr();
 
     // Throw error if types don't match
-    if (node->Assignment.expr->type->kind != variableNode->Variable.symbol->type->kind) {
-        error(node->token, "cannot assign '%s' to variable of type '%s'", node->Assignment.expr->type->name, variableNode->Variable.symbol->type->name);
+    if (node->Assignment.expr->type->kind != variable_node->Variable.symbol->type->kind) {
+        error(node->token, "cannot assign '%s' to variable of type '%s'", node->Assignment.expr->type->name, variable_node->Variable.symbol->type->name);
     }
 
     // Warn about changing pointer type
-    if ((node->Assignment.expr->type->base != NULL) && (variableNode->Variable.symbol->type->base != NULL)) {
-        if (strcmp(node->Assignment.expr->type->base->name, variableNode->Variable.symbol->type->base->name) != 0) {
+    if ((node->Assignment.expr->type->base != NULL) && (variable_node->Variable.symbol->type->base != NULL)) {
+        if (strcmp(node->Assignment.expr->type->base->name, variable_node->Variable.symbol->type->base->name) != 0) {
             warning(node->token, "assignment of incompatible pointer types");
         }
     }
 
-    node->type = variableNode->Variable.symbol->type;
+    node->type = variable_node->Variable.symbol->type;
 
     return node;
 }
 
 // factor : ((PLUS | MINUS) factor) | ((ASTERISK | AMPERSAND) variable) | NUMBER | ID | assignment | LPAREN expr RPAREN
-static Node* factor () {
+static struct Node* factor () {
     if (peek(TK_PLUS) || peek(TK_MINUS)) {
-        Node* node = newNode(curToken, N_UNARY);
+        struct Node* node = new_node(current_token, N_UNARY);
         eat();
         node->UnaryOp.left = factor();
         node->type = node->UnaryOp.left->type;
@@ -120,38 +120,38 @@ static Node* factor () {
         // TODO this won't allow something like *(pointer + 1)
         // Should use an expr (maybe starting at additive_expr actually) instead of a just variable
 
-        int mustBePointer = 0;
-        if (peek(TK_ASTERISK)) mustBePointer = 1;
+        int must_be_pointer = 0;
+        if (peek(TK_ASTERISK)) must_be_pointer = 1;
 
-        Node* node = newNode(curToken, N_UNARY);
+        struct Node* node = new_node(current_token, N_UNARY);
         eat();
 
         // Just to give a clearer error message
-        if (!peek(TK_ID)) eatKind(TK_ID);
+        if (!peek(TK_ID)) eat_kind(TK_ID);
 
         // Lookup symbol from current scope
-        Node* variableNode = newNode(curToken, N_VARIABLE);
-        variableNode->Variable.symbol = lookupSymbol(curToken);
-        variableNode->type = variableNode->Variable.symbol->type;
+        struct Node* variable_node = new_node(current_token, N_VARIABLE);
+        variable_node->Variable.symbol = lookup_symbol(current_token);
+        variable_node->type = variable_node->Variable.symbol->type;
 
         // Must be a pointer to be dereferenced
-        if (mustBePointer) {
-            if (variableNode->Variable.symbol->type->kind != TY_POINTER) {
-                error(variableNode->token, "left must be a pointer");
+        if (must_be_pointer) {
+            if (variable_node->Variable.symbol->type->kind != TY_POINTER) {
+                error(variable_node->token, "left must be a pointer");
             }
         }
 
         eat(TK_ID);
 
-        node->UnaryOp.left = variableNode;
+        node->UnaryOp.left = variable_node;
 
-        if (mustBePointer) node->type = node->UnaryOp.left->type->base;
-        else node->type = pointerTo(node->UnaryOp.left->type);
+        if (must_be_pointer) node->type = node->UnaryOp.left->type->base;
+        else node->type = pointer_to(node->UnaryOp.left->type);
 
         return node;
     } else if (peek(TK_NUMBER)) {
-        Node* node = newNode(curToken, N_NUMBER);
-        node->type = &typeChar; // Temp, will have to check the token value to determine the correct data type
+        struct Node* node = new_node(current_token, N_NUMBER);
+        node->type = &type_char; // Temp, will have to check the token value to determine the correct data type
         eat();
         return node;
     } else if (peek(TK_ID)) {
@@ -159,15 +159,15 @@ static Node* factor () {
             return assignment();
         } else {
             // Lookup symbol from current scope
-            Node* node = newNode(curToken, N_VARIABLE);
-            node->Variable.symbol = lookupSymbol(curToken);
+            struct Node* node = new_node(current_token, N_VARIABLE);
+            node->Variable.symbol = lookup_symbol(current_token);
             node->type = node->Variable.symbol->type;
             eat(TK_ID);
             return node;
         }
     } else if (peek(TK_LPAREN)) {
         eat();
-        Node* node = expr();
+        struct Node* node = expr();
         eat(TK_RPAREN);
         return node;
     }
@@ -176,99 +176,99 @@ static Node* factor () {
 }
 
 // term : factor ((MUL | DIV) factor)*
-Node* term () {
-    Node* factorNode = factor();
-    Node* node = factorNode;
+static struct Node* term () {
+    struct Node* factor_node = factor();
+    struct Node* node = factor_node;
 
     while (peek(TK_ASTERISK) || peek(TK_DIV)) {
-        Token* token = curToken;
+        struct Token* token = current_token;
         eat();
-        node = newNode(token, N_BINOP);
-        node->BinOp.left = factorNode;
+        node = new_node(token, N_BINOP);
+        node->BinOp.left = factor_node;
         node->BinOp.right = term();
-        node->type = getCommonType(node->BinOp.left->type, node->BinOp.right->type);
+        node->type = get_common_type(node->BinOp.left->type, node->BinOp.right->type);
     }
     
     return node;
 }
 
 // additive_expr : term ((PLUS | MINUS) term)*
-Node* additive_expr () {
-    Node* node = term();
+static struct Node* additive_expr () {
+    struct Node* node = term();
 
     while (peek(TK_PLUS) || peek(TK_MINUS)) {
-        Token* token = curToken;
+        struct Token* token = current_token;
         eat();
-        Node* oldNode = node;
-        node = newNode(token, N_BINOP);
-        node->BinOp.left = oldNode;
+        struct Node* old_node = node;
+        node = new_node(token, N_BINOP);
+        node->BinOp.left = old_node;
         node->BinOp.right = term();
-        node->type = getCommonType(node->BinOp.left->type, node->BinOp.right->type);
+        node->type = get_common_type(node->BinOp.left->type, node->BinOp.right->type);
     }
 
     return node;
 }
 
 // relational_expr : additive_expr ((MORE | LESS | MORE_EQUAL | LESS_EQUAL) additive_expr)*
-Node* relational_expr () {
-    Node* node = additive_expr();
+static struct Node* relational_expr () {
+    struct Node* node = additive_expr();
 
     while (peek(TK_MORE) || peek(TK_LESS) || peek(TK_MORE_EQUAL) || peek(TK_LESS_EQUAL)) {
-        Token* token = curToken;
+        struct Token* token = current_token;
         eat();
-        Node* oldNode = node;
-        node = newNode(token, N_BINOP);
-        node->BinOp.left = oldNode;
+        struct Node* old_node = node;
+        node = new_node(token, N_BINOP);
+        node->BinOp.left = old_node;
         node->BinOp.right = additive_expr();
-        node->type = getCommonType(node->BinOp.left->type, node->BinOp.right->type);
+        node->type = get_common_type(node->BinOp.left->type, node->BinOp.right->type);
     }
 
     return node;
 }
 
 // equality_expr : relational_expr ((EQUAL | NOT_EQUAL) relational_expr)*
-Node* equality_expr () {
-    Node* node = relational_expr();
+static struct Node* equality_expr () {
+    struct Node* node = relational_expr();
 
     while (peek(TK_EQUAL) || peek(TK_NOT_EQUAL)) {
-        Token* token = curToken;
+        Token* token = current_token;
         eat();
-        Node* oldNode = node;
-        node = newNode(token, N_BINOP);
-        node->BinOp.left = oldNode;
+        struct Node* old_node = node;
+        node = new_node(token, N_BINOP);
+        node->BinOp.left = old_node;
         node->BinOp.right = relational_expr();
-        node->type = getCommonType(node->BinOp.left->type, node->BinOp.right->type);
+        node->type = get_common_type(node->BinOp.left->type, node->BinOp.right->type);
     }
 
     return node;
 }
 
 // expr : equality_expr
-static Node* expr() {
+static struct Node* expr() {
     return equality_expr();
 }
 
 // return_statement : RETURN expr
-static Node* return_statement() {
-    Token* token = curToken;
-    eatKind(TK_RETURN);
-    Node* node = newNode(token, N_RETURN);
+static struct Node* return_statement() {
+    Token* token = current_token;
+    eat_kind(TK_RETURN);
+    struct Node* node = new_node(token, N_RETURN);
     node->Return.expr = expr();
     node->type = node->Return.expr->type;
     return node;
 }
 
 // return_statement : IF LPAREN expr RPAREN statement (ELSE statement)?
-static Node* if_statement() {
-    Token* token = curToken;
-    eatKind(TK_IF);
+static struct Node* if_statement() {
+    struct Token* token = current_token;
+    eat_kind(TK_IF);
 
-    Node* node = newNode(token, N_IF);
+    struct Node* node = new_node(token, N_IF);
 
-    eatKind(TK_LPAREN);
+    eat_kind(TK_LPAREN);
     node->If.expr = expr();
     node->type = node->If.expr->type;
-    eatKind(TK_RPAREN);
+    eat_kind(TK_RPAREN);
 
     node->If.true_statement = statement();
 
@@ -284,16 +284,16 @@ static Node* if_statement() {
 }
 
 // while_statement : WHILE LPAREN expr RPAREN statement
-static Node* while_statement() {
-    Token* token = curToken;
-    eatKind(TK_WHILE);
+static struct Node* while_statement() {
+    struct Token* token = current_token;
+    eat_kind(TK_WHILE);
 
-    Node* node = newNode(token, N_WHILE);
+    struct Node* node = new_node(token, N_WHILE);
 
-    eatKind(TK_LPAREN);
+    eat_kind(TK_LPAREN);
     node->While.expr = expr();
     node->type = node->While.expr->type;
-    eatKind(TK_RPAREN);
+    eat_kind(TK_RPAREN);
 
     node->While.loop_statement = statement();
 
@@ -301,12 +301,12 @@ static Node* while_statement() {
 }
 
 // statement : (return_statement SEMICOLON) | (if_statement) | (block) | (expr SEMICOLON)
-static Node* statement() {
-    Node* node;
+static struct Node* statement() {
+    struct Node* node;
 
     if (peek(TK_RETURN)) {
         node = return_statement();
-        eatKind(TK_SEMICOLON);
+        eat_kind(TK_SEMICOLON);
     } else if (peek(TK_IF)) {
         node = if_statement();
     } else if (peek(TK_WHILE)) {
@@ -315,105 +315,105 @@ static Node* statement() {
         node = block();
     } else {
         node = expr();
-        eatKind(TK_SEMICOLON);
+        eat_kind(TK_SEMICOLON);
     }
 
     return node;
 }
 
 // type : TYPE (ASTERISK)
-static Type* type() {
-    Type* type = getSymbolType(curToken);
-    eatKind(TK_TYPE);
+static struct Type* type() {
+    struct Type* type = get_symbol_type(current_token);
+    eat_kind(TK_TYPE);
 
     while (peek(TK_ASTERISK)) {
         eat();
-        type = pointerTo(type);
+        type = pointer_to(type);
     }
 
     return type;
 }
 
 // var_decl : type ID SEMICOLON
-static Node* var_decl() {
-    Type* symbolType = type();
-    Node* node = newNode(curToken, N_VAR_DECL);
+static struct Node* var_decl() {
+    struct Type* symbolType = type();
+    struct Node* node = new_node(current_token, N_VAR_DECL);
 
-    Symbol* symbol = calloc(1, sizeof(Symbol));
+    struct Symbol* symbol = calloc(1, sizeof(struct Symbol));
     symbol->type = symbolType;
 
-    symbol->token = curToken;
+    symbol->token = current_token;
 
-    scopeAddSymbol(symbol);
+    scope_add_symbol(symbol);
 
     node->VarDecl.symbol = symbol;
     node->type = symbol->type;
     
-    eatKind(TK_ID);
+    eat_kind(TK_ID);
     return node;
 }
 
 // Should maybe just treat var_decl as another type of statement
 // block : LBRACE (statement | var_decl SEMICOLON)* RBRACE
-static Node* block() {
-    enterNewScope();
+static struct Node* block() {
+    enter_new_scope();
 
-    Node* node = newNode(curToken, N_BLOCK);
-    node->type = &typeVoid;
-    eatKind(TK_LBRACE);
+    struct Node* node = new_node(current_token, N_BLOCK);
+    node->type = &type_void;
+    eat_kind(TK_LBRACE);
     while (!peek(TK_RBRACE)) {
         if (peek(TK_TYPE)) {
-            addNodeListEntry(&node->Block.variableDeclarations, var_decl());
-            eatKind(TK_SEMICOLON);
+            add_node_list_entry(&node->Block.variable_declarations, var_decl());
+            eat_kind(TK_SEMICOLON);
         }
         else {
-            addNodeListEntry(&node->Block.statements, statement());
+            add_node_list_entry(&node->Block.statements, statement());
         }
     }
-    eatKind(TK_RBRACE);
+    eat_kind(TK_RBRACE);
 
-    exitScope();
+    exit_scope();
 
     return node;
 }
 
 // Probably should be a list of statements rather than a block, would make code generation a bit neater
 // function_decl : type ID LPAREN (FORMAL_PARAMETERS)? RPAREN block
-static Node* function_decl() {
-    enterNewScope();
+static struct Node* function_decl() {
+    enter_new_scope();
 
-    Type* symbolType = type();
-    Node* node = newNode(curToken, N_FUNC_DECL);
+    struct Type* symbolType = type();
+    struct Node* node = new_node(current_token, N_FUNC_DECL);
     node->type = symbolType;
-    eatKind(TK_ID);
-    eatKind(TK_LPAREN);
+    eat_kind(TK_ID);
+    eat_kind(TK_LPAREN);
 
     if (!peek(TK_RPAREN)) {
-        addNodeListEntry(&node->FunctionDecl.formalParameters, var_decl());
+        add_node_list_entry(&node->FunctionDecl.formal_parameters, var_decl());
         while (peek(TK_COMMA)) {
-            eatKind(TK_COMMA);
-            addNodeListEntry(&node->FunctionDecl.formalParameters, var_decl());
+            eat_kind(TK_COMMA);
+            add_node_list_entry(&node->FunctionDecl.formal_parameters, var_decl());
         }
     }
 
-    eatKind(TK_RPAREN);
+    eat_kind(TK_RPAREN);
 
     node->FunctionDecl.block = block();
 
-    exitScope();
+    exit_scope();
 
     return node;
 }
 
-Node* parse(Token* firstToken) {
-    curToken = firstToken;
+struct Node* parse(Token* first_token) {
+    current_token = first_token;
 
     // Global scope
-    enterNewScope();
+    enter_new_scope();
 
-    Node* rootNode = function_decl();
+    struct Node* root_node = function_decl();
     
-    exitScope();
+    exit_scope();
 
-    return rootNode;
+    return root_node;
 }

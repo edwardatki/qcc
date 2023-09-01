@@ -7,111 +7,111 @@
 #include "symbol.h"
 #include "type.h"
 
-static Scope* currentScope = NULL;
-static int scopeCount = 0;
+static struct Scope* current_scope = NULL;
+static int scope_count = 0;
 
-static void addSymbolListEntry(SymbolListEntry** rootEntry, Symbol* entrySymbol) {
-    if (*rootEntry == NULL) {
-        *rootEntry = calloc(1, sizeof(SymbolListEntry));
+static void add_symbol_list_entry(struct SymbolListEntry** root_entry, struct Symbol* entry_symbol) {
+    if (*root_entry == NULL) {
+        *root_entry = calloc(1, sizeof(struct SymbolListEntry));
     }
 
-    SymbolListEntry* curEntry = *rootEntry;
+    struct SymbolListEntry* current_entry = *root_entry;
 
     // Travel to end of list
-    while (curEntry->next != NULL) {
-        curEntry = curEntry->next;
+    while (current_entry->next != NULL) {
+        current_entry = current_entry->next;
     }
 
     // // Create new entry
-    SymbolListEntry* newEntry = calloc(1, sizeof(SymbolListEntry));
-    newEntry->symbol = entrySymbol;
-    curEntry->next = newEntry;
+    struct SymbolListEntry* new_entry = calloc(1, sizeof(struct SymbolListEntry));
+    new_entry->symbol = entry_symbol;
+    current_entry->next = new_entry;
 }
 
-void enterNewScope() {
+void enter_new_scope() {
     // printf("ENTER SCOPE\n");
-    Scope* newScope = calloc(1, sizeof(Scope));
-    newScope->parentScope = currentScope;
-    newScope->symbolList = NULL;
+    struct Scope* new_scope = calloc(1, sizeof(struct Scope));
+    new_scope->parent_scope = current_scope;
+    new_scope->symbol_list = NULL;
     
-    if (currentScope == NULL) newScope->depth = 0;
-    else newScope->depth = currentScope->depth + 1;
+    if (current_scope == NULL) new_scope->depth = 0;
+    else new_scope->depth = current_scope->depth + 1;
 
-    newScope->id = scopeCount;
+    new_scope->id = scope_count;
 
-    newScope->stackSize = 0;
+    new_scope->stack_size = 0;
 
-    currentScope = newScope;
-    scopeCount += 1;
+    current_scope = new_scope;
+    scope_count += 1;
 }
 
-void exitScope() {
-    Scope* oldScope = currentScope;
-    currentScope = currentScope->parentScope;
+void exit_scope() {
+    struct Scope* old_scope = current_scope;
+    current_scope = current_scope->parent_scope;
     // printf("EXIT SCOPE\n");
 }
 
-Scope* getCurrentScope() {
-    return currentScope;
+struct Scope* get_current_scope() {
+    return current_scope;
 }
 
-void scopeAddSymbol(Symbol* symbol) {
-    addSymbolListEntry(&currentScope->symbolList, symbol);
+void scope_add_symbol(struct Symbol* symbol) {
+    add_symbol_list_entry(&current_scope->symbol_list, symbol);
 
     // Check if in global scope
-    if (currentScope->id == 0) {
+    if (current_scope->id == 0) {
         symbol->global = 1;
     } else {
         symbol->global = 0;
 
         // Allocate position on stack
-        symbol->stackPosition = currentScope->stackSize;
-        currentScope->stackSize += symbol->type->size;
+        symbol->stack_position = current_scope->stack_size;
+        current_scope->stack_size += symbol->type->size;
     }
 }
 
 // Finds the "most local" symbol of given identifier
-Symbol* lookupSymbol(Token* token) {
-    Scope* searchScope = currentScope;
-    while (searchScope != NULL) {
-        // printf("SEARCHING SCOPE: %d\n", searchScope->id);
-        SymbolListEntry* curEntry = searchScope->symbolList;
-        while (curEntry != NULL) {
-            if (curEntry->symbol != NULL) { // First item is always empty, should change how my lists work
+struct Symbol* lookup_symbol(struct Token* token) {
+    struct Scope* search_scope = current_scope;
+    while (search_scope != NULL) {
+        // printf("SEARCHING SCOPE: %d\n", search_scope->id);
+        struct SymbolListEntry* current_entry = search_scope->symbol_list;
+        while (current_entry != NULL) {
+            if (current_entry->symbol != NULL) { // First item is always empty, should change how my lists work
                 // Check if matches the symbol we're looking for
                 // TODO: Type checking
-                if (strcmp(curEntry->symbol->token->value, token->value) == 0) return curEntry->symbol;
+                if (strcmp(current_entry->symbol->token->value, token->value) == 0) return current_entry->symbol;
             }
-            curEntry = curEntry->next;
+            current_entry = current_entry->next;
         }
 
-        searchScope = searchScope->parentScope;
+        search_scope = search_scope->parent_scope;
     }
 
     error(token, "'%s' undeclared", token->value);
 }
 
-int getSymbolStackOffset(Symbol* symbol, Scope* scope) {
+int get_symbol_stack_offset(struct Symbol* symbol, struct Scope* scope) {
     // Traverse up from scope until symbol located adding up all stack sizes
     // This should give us offsets for variables on parent stack frames
 
-    Scope* searchScope = scope;
-    int stackOffset = 0;
-    while (searchScope != NULL) {
-        // printf("SEARCHING SCOPE: %d size %d\n", searchScope->id, searchScope->stackSize);
-        SymbolListEntry* curEntry = searchScope->symbolList;
-        while (curEntry != NULL) {
-            if (curEntry->symbol != NULL) { // First item is always empty, should change how my lists work
+    struct Scope* search_scope = scope;
+    int stack_offset = 0;
+    while (search_scope != NULL) {
+        // printf("SEARCHING SCOPE: %d size %d\n", search_scope->id, search_scope->stack_size);
+        struct SymbolListEntry* current_entry = search_scope->symbol_list;
+        while (current_entry != NULL) {
+            if (current_entry->symbol != NULL) { // First item is always empty, should change how my lists work
                 // Check if matches the symbol we're looking for
-                if (strcmp(curEntry->symbol->token->value, symbol->token->value) == 0) {
+                if (strcmp(current_entry->symbol->token->value, symbol->token->value) == 0) {
                     // TODO make this clearer
-                    return stackOffset+searchScope->stackSize-curEntry->symbol->stackPosition-curEntry->symbol->type->size;
+                    return stack_offset+search_scope->stack_size-current_entry->symbol->stack_position-current_entry->symbol->type->size;
                 }
             }
-            curEntry = curEntry->next;
+            current_entry = current_entry->next;
         }
-        stackOffset += searchScope->stackSize;
-        searchScope = searchScope->parentScope;
+        stack_offset += search_scope->stack_size;
+        search_scope = search_scope->parent_scope;
     }
 
     return -1;

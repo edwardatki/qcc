@@ -7,8 +7,8 @@
 #include "parser.h"
 
 int main(int argc, char **argv) {
-    char* input_filename;
-    char* output_filename;
+    char* input_filename = NULL;
+    char* output_filename = NULL;
     
     // Process arguments
     int i = 1;
@@ -27,10 +27,10 @@ int main(int argc, char **argv) {
     if (input_filename == NULL) error(NULL, "no input file supplied");
 
     // Lex
-    Token* first_token = lex(input_filename);
+    struct Token* first_token = lex(input_filename);
     
     // Parse
-    Node* root_node = parse(first_token);
+    struct Node* root_node = parse(first_token);
     
     // Generate code
     char* result = generate(root_node);

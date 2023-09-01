@@ -2,33 +2,26 @@
 #define _SCOPE_H
 
 struct Symbol;
-typedef struct Symbol Symbol;
-
 struct Token;
-typedef struct Token Token;
-
-typedef struct Scope Scope;
-typedef struct SymbolListEntry SymbolListEntry;
 
 struct Scope {
-    Scope* parentScope;
+    struct Scope* parent_scope;
     int depth;
     int id;
-    int stackSize;
-    SymbolListEntry* symbolList;
+    int stack_size;
+    struct SymbolListEntry* symbol_list;
 };
 
 struct SymbolListEntry {
-    Symbol* symbol;
-    SymbolListEntry* next;
+    struct Symbol* symbol;
+    struct SymbolListEntry* next;
 };
 
-void enterNewScope();
-void exitScope();
-Scope* getCurrentScope();
-void scopeAddSymbol(Symbol*);
-Symbol* lookupSymbol(Token*);
-char* getSymbolLocation(Symbol*);
-int getSymbolStackOffset(Symbol*, Scope*);
+void enter_new_scope();
+void exit_scope();
+struct Scope* get_current_scope();
+void scope_add_symbol(struct Symbol*);
+struct Symbol* lookup_symbol(struct Token*);
+int get_symbol_stack_offset(struct Symbol*, struct Scope*);
 
 #endif

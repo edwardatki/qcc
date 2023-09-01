@@ -8,33 +8,33 @@
 #include "type.h"
 
 char* filename;
-Token* curToken;
+Token* current_token;
 
-int currentLine = 1;
-int currentColumn = 0;
+int current_line = 1;
+int current_column = 0;
 
-static Token* newToken(enum TokenKind kind) {
-    Token* token = calloc(1, sizeof(Token));
+static struct Token* new_token(enum TokenKind kind) {
+    struct Token* token = calloc(1, sizeof(Token));
     token->kind = kind;
     return token;
 }
 
-static void addToken(enum TokenKind kind, char* value, int line, int column) {
-    Token* token = newToken(TK_END);
-    curToken->next = token;
-    curToken->kind = kind;
-    curToken->value = value;
-    curToken->filename = filename;
-    if (value != NULL) curToken->length = strlen(value);
-    else curToken->length = 0;
-    curToken->line = line;
-    curToken->column = column;
-    curToken = token;
+static void add_token(enum TokenKind kind, char* value, int line, int column) {
+    struct Token* token = new_token(TK_END);
+    current_token->next = token;
+    current_token->kind = kind;
+    current_token->value = value;
+    current_token->filename = filename;
+    if (value != NULL) current_token->length = strlen(value);
+    else current_token->length = 0;
+    current_token->line = line;
+    current_token->column = column;
+    current_token = token;
 }
 
 static char next(FILE* fp) {
     char c = getc(fp);
-    currentColumn++;
+    current_column++;
     return c;
 }
 
@@ -44,7 +44,7 @@ static char peek(FILE* fp) {
     return c;
 }
 
-static int isWhitespace(char c) {
+static int is_whitespace(char c) {
     if (c == ' ') return 1;
     if (c == '\t') return 1;
     return 0;
@@ -67,8 +67,8 @@ char* get_line(int index) {
     return line;
 }
 
-static void checkNumeric(FILE* fp, char c) {
-    int startColumn = currentColumn;
+static void check_numeric(FILE* fp, char c) {
+    int start_column = current_column;
 
     char* value = calloc(32, sizeof(char));
     int i = 0;
@@ -78,11 +78,11 @@ static void checkNumeric(FILE* fp, char c) {
         c = next(fp);
     }
 
-    addToken(TK_NUMBER, value, currentLine, startColumn);
+    add_token(TK_NUMBER, value, current_line, start_column);
 }
 
-static void checkKeyword(FILE* fp, char c) {
-    int startColumn = currentColumn;
+static void check_keyword(FILE* fp, char c) {
+    int start_column = current_column;
 
     char* value = calloc(32, sizeof(char));
     int i = 0;
@@ -93,48 +93,48 @@ static void checkKeyword(FILE* fp, char c) {
     }
 
     // Check if a defined type
-    for (int i = 0; i < sizeof(baseTypes)/sizeof(baseTypes[0]); i++) {
-        if (strcmp(value, baseTypes[i]->name) == 0) {
-            addToken(TK_TYPE, value, currentLine, startColumn); 
+    for (int i = 0; i < sizeof(base_types)/sizeof(base_types[0]); i++) {
+        if (strcmp(value, base_types[i]->name) == 0) {
+            add_token(TK_TYPE, value, current_line, start_column); 
             return;
         }
     }
 
-    if (strcmp(value, "return") == 0) addToken(TK_RETURN, value, currentLine, startColumn);
-    else if (strcmp(value, "if") == 0) addToken(TK_IF, value, currentLine, startColumn);
-    else if (strcmp(value, "else") == 0) addToken(TK_ELSE, value, currentLine, startColumn);
-    else if (strcmp(value, "while") == 0) addToken(TK_WHILE, value, currentLine, startColumn);
-    else addToken(TK_ID, value, currentLine, startColumn);
+    if (strcmp(value, "return") == 0) add_token(TK_RETURN, value, current_line, start_column);
+    else if (strcmp(value, "if") == 0) add_token(TK_IF, value, current_line, start_column);
+    else if (strcmp(value, "else") == 0) add_token(TK_ELSE, value, current_line, start_column);
+    else if (strcmp(value, "while") == 0) add_token(TK_WHILE, value, current_line, start_column);
+    else add_token(TK_ID, value, current_line, start_column);
 }
 
 // TODO Things could be easier if we just read the whole file into memory
 // Token values could just point into the file data and we add a length variable
-Token* lex(char* _filename) {
+struct Token* lex(char* _filename) {
     filename = _filename;
 
     FILE *fp = fopen(filename, "r");
     if (!fp) error(NULL, "unable to open file '%s'", filename);
 
-    Token* firstToken = newToken(TK_END);
-    curToken = firstToken;
+    struct Token* first_token = new_token(TK_END);
+    current_token = first_token;
 
     while (1) {
         char c = next(fp);
 
         // Track line number
         if (c =='\n') {
-            currentLine++;
-            currentColumn = 0;
+            current_line++;
+            current_column = 0;
         }
 
         // Exit at end of file
         if (c == EOF) {
-            addToken(TK_END, NULL, currentLine, currentColumn);
+            add_token(TK_END, NULL, current_line, current_column);
             break;
         }
 
         // Skip whitespace
-        if (isWhitespace(c)) {
+        if (is_whitespace(c)) {
             continue;
         }
 
@@ -145,33 +145,33 @@ Token* lex(char* _filename) {
         }
 
         // Check double character tokens
-        if ((c == '>') && (peek(fp) == '=')) {addToken(TK_MORE_EQUAL, ">=", currentLine, currentColumn); next(fp); continue;}
-        if ((c == '<') && (peek(fp) == '=')) {addToken(TK_LESS_EQUAL, "<=", currentLine, currentColumn); next(fp); continue;}
-        if ((c == '=') && (peek(fp) == '=')) {addToken(TK_EQUAL, "==", currentLine, currentColumn); next(fp); continue;}
-        if ((c == '!') && (peek(fp) == '=')) {addToken(TK_NOT_EQUAL, "!=", currentLine, currentColumn); next(fp); continue;}
+        if ((c == '>') && (peek(fp) == '=')) {add_token(TK_MORE_EQUAL, ">=", current_line, current_column); next(fp); continue;}
+        if ((c == '<') && (peek(fp) == '=')) {add_token(TK_LESS_EQUAL, "<=", current_line, current_column); next(fp); continue;}
+        if ((c == '=') && (peek(fp) == '=')) {add_token(TK_EQUAL, "==", current_line, current_column); next(fp); continue;}
+        if ((c == '!') && (peek(fp) == '=')) {add_token(TK_NOT_EQUAL, "!=", current_line, current_column); next(fp); continue;}
 
         // Check single character tokens
-        if (c == '(') {addToken(TK_LPAREN, "{", currentLine, currentColumn); continue;}
-        if (c == ')') {addToken(TK_RPAREN, "}", currentLine, currentColumn); continue;}
-        if (c == '{') {addToken(TK_LBRACE, "{", currentLine, currentColumn); continue;}
-        if (c == '}') {addToken(TK_RBRACE, "}", currentLine, currentColumn); continue;}
-        if (c == ',') {addToken(TK_COMMA, ",", currentLine, currentColumn); continue;}
-        if (c == '+') {addToken(TK_PLUS, "+", currentLine, currentColumn); continue;}
-        if (c == '-') {addToken(TK_MINUS, "-", currentLine, currentColumn); continue;}
-        if (c == '*') {addToken(TK_ASTERISK, "*", currentLine, currentColumn); continue;}
-        if (c == '/') {addToken(TK_DIV, "/", currentLine, currentColumn); continue;}
-        if (c == '=') {addToken(TK_ASSIGN, "=", currentLine, currentColumn); continue;}
-        if (c == ';') {addToken(TK_SEMICOLON, ";", currentLine, currentColumn); continue;}
-        if (c == '>') {addToken(TK_MORE, ">", currentLine, currentColumn); continue;}
-        if (c == '<') {addToken(TK_LESS, "<", currentLine, currentColumn); continue;}
-        if (c == '&') {addToken(TK_AMPERSAND, "&", currentLine, currentColumn); continue;}
+        if (c == '(') {add_token(TK_LPAREN, "{", current_line, current_column); continue;}
+        if (c == ')') {add_token(TK_RPAREN, "}", current_line, current_column); continue;}
+        if (c == '{') {add_token(TK_LBRACE, "{", current_line, current_column); continue;}
+        if (c == '}') {add_token(TK_RBRACE, "}", current_line, current_column); continue;}
+        if (c == ',') {add_token(TK_COMMA, ",", current_line, current_column); continue;}
+        if (c == '+') {add_token(TK_PLUS, "+", current_line, current_column); continue;}
+        if (c == '-') {add_token(TK_MINUS, "-", current_line, current_column); continue;}
+        if (c == '*') {add_token(TK_ASTERISK, "*", current_line, current_column); continue;}
+        if (c == '/') {add_token(TK_DIV, "/", current_line, current_column); continue;}
+        if (c == '=') {add_token(TK_ASSIGN, "=", current_line, current_column); continue;}
+        if (c == ';') {add_token(TK_SEMICOLON, ";", current_line, current_column); continue;}
+        if (c == '>') {add_token(TK_MORE, ">", current_line, current_column); continue;}
+        if (c == '<') {add_token(TK_LESS, "<", current_line, current_column); continue;}
+        if (c == '&') {add_token(TK_AMPERSAND, "&", current_line, current_column); continue;}
 
         // Check multi character tokens
-        if (isdigit(c)) {checkNumeric(fp, c); continue;}
-        if (isalpha(c)) {checkKeyword(fp, c); continue;}
+        if (isdigit(c)) {check_numeric(fp, c); continue;}
+        if (isalpha(c)) {check_keyword(fp, c); continue;}
     }
 
     fclose(fp);
     
-    return firstToken;
+    return first_token;
 }

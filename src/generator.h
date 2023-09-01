@@ -2,8 +2,7 @@
 #define _GENERATOR_H
 
 struct Node;
-typedef struct Node Node;
 
-char* generate(Node*);
+char* generate(struct Node*);
 
 #endif

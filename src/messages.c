@@ -5,7 +5,7 @@
 #include "lexer.h"
 
 // TODO some weirdness when token near EOF
-static void print_token_context(Token* token, const char* color) {
+static void print_token_context(struct Token* token, const char* color) {
     printf(WHT "%4d | ", token->line);
     char* line = get_line(token->line);
     int i = 0;
@@ -27,7 +27,7 @@ static void print_token_context(Token* token, const char* color) {
     printf(RESET "\n");
 }
 
-void error(Token* token, const char* format, ...) {
+void error(struct Token* token, const char* format, ...) {
     if (token == NULL) {
         printf(BOLD RED "error: " RESET);
     } else {
@@ -46,7 +46,7 @@ void error(Token* token, const char* format, ...) {
     exit(EXIT_FAILURE);
 }
 
-void warning(Token* token, const char* format, ...) {
+void warning(struct Token* token, const char* format, ...) {
     if (token == NULL) {
         printf(BOLD YEL "warning: " RESET);
     } else {
