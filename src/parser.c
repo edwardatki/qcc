@@ -77,37 +77,6 @@ static struct Node* new_node(struct Token* token, enum NodeKind kind) {
 
 static struct Node* expr();
 
-// assignment : variable ASSIGN expr
-static struct Node* assignment () {
-    // Lookup symbol from current scope
-    struct Node* variable_node = new_node(current_token, N_VARIABLE);
-    variable_node->Variable.symbol = lookup_symbol(current_token);
-    variable_node->type = variable_node->Variable.symbol->type;
-
-    eat(TK_ID);
-    struct Token* token = current_token;
-    eat(TK_ASSIGN);
-    struct Node* node = new_node(token, N_ASSIGNMENT);
-    node->Assignment.variable = variable_node;
-    node->Assignment.expr = expr();
-
-    // Throw error if types don't match
-    if (node->Assignment.expr->type->kind != variable_node->Variable.symbol->type->kind) {
-        error(node->token, "cannot assign '%s' to variable of type '%s'", node->Assignment.expr->type->name, variable_node->Variable.symbol->type->name);
-    }
-
-    // Warn about changing pointer type
-    if ((node->Assignment.expr->type->base != NULL) && (variable_node->Variable.symbol->type->base != NULL)) {
-        if (strcmp(node->Assignment.expr->type->base->name, variable_node->Variable.symbol->type->base->name) != 0) {
-            warning(node->token, "assignment of incompatible pointer types");
-        }
-    }
-
-    node->type = variable_node->Variable.symbol->type;
-
-    return node;
-}
-
 // factor : ((PLUS | MINUS) factor) | ((ASTERISK | AMPERSAND) variable) | NUMBER | ID | assignment | LPAREN expr RPAREN
 static struct Node* factor () {
     if (peek(TK_PLUS) || peek(TK_MINUS)) {
@@ -151,20 +120,16 @@ static struct Node* factor () {
         return node;
     } else if (peek(TK_NUMBER)) {
         struct Node* node = new_node(current_token, N_NUMBER);
-        node->type = &type_char; // Temp, will have to check the token value to determine the correct data type
+        node->type = &type_char; // TODO determine the correct data type from token value
         eat();
         return node;
     } else if (peek(TK_ID)) {
-        if (peek2(TK_ASSIGN)) {
-            return assignment();
-        } else {
-            // Lookup symbol from current scope
-            struct Node* node = new_node(current_token, N_VARIABLE);
-            node->Variable.symbol = lookup_symbol(current_token);
-            node->type = node->Variable.symbol->type;
-            eat(TK_ID);
-            return node;
-        }
+        // Lookup symbol from current scope
+        struct Node* node = new_node(current_token, N_VARIABLE);
+        node->Variable.symbol = lookup_symbol(current_token);
+        node->type = node->Variable.symbol->type;
+        eat(TK_ID);
+        return node;
     } else if (peek(TK_LPAREN)) {
         eat();
         struct Node* node = expr();
@@ -186,7 +151,7 @@ static struct Node* term () {
         node = new_node(token, N_BINOP);
         node->BinOp.left = factor_node;
         node->BinOp.right = term();
-        node->type = get_common_type(node->BinOp.left->type, node->BinOp.right->type);
+        node->type = get_common_type(token, node->BinOp.left->type, node->BinOp.right->type);
     }
     
     return node;
@@ -203,7 +168,7 @@ static struct Node* additive_expr () {
         node = new_node(token, N_BINOP);
         node->BinOp.left = old_node;
         node->BinOp.right = term();
-        node->type = get_common_type(node->BinOp.left->type, node->BinOp.right->type);
+        node->type = get_common_type(token, node->BinOp.left->type, node->BinOp.right->type);
     }
 
     return node;
@@ -220,7 +185,7 @@ static struct Node* relational_expr () {
         node = new_node(token, N_BINOP);
         node->BinOp.left = old_node;
         node->BinOp.right = additive_expr();
-        node->type = get_common_type(node->BinOp.left->type, node->BinOp.right->type);
+        node->type = get_common_type(token, node->BinOp.left->type, node->BinOp.right->type);
     }
 
     return node;
@@ -237,15 +202,33 @@ static struct Node* equality_expr () {
         node = new_node(token, N_BINOP);
         node->BinOp.left = old_node;
         node->BinOp.right = relational_expr();
-        node->type = get_common_type(node->BinOp.left->type, node->BinOp.right->type);
+        node->type = get_common_type(token, node->BinOp.left->type, node->BinOp.right->type);
     }
 
     return node;
 }
 
-// expr : equality_expr
+// assignment : equality_expr (ASSIGN assignment)
+static struct Node* assignment () {
+    struct Node* node = equality_expr();
+    
+    if (peek(TK_ASSIGN)) {
+        struct Token* token = current_token;
+        eat();
+        struct Node* expr = node;
+        node = new_node(token, N_ASSIGNMENT);
+        node->Assignment.left = expr;
+        node->Assignment.right = assignment();
+
+        node->type = get_common_type(token, node->Assignment.left->type, node->Assignment.right->type);
+    }
+
+    return node;
+}
+
+// expr : assignment
 static struct Node* expr() {
-    return equality_expr();
+    return assignment();
 }
 
 // return_statement : RETURN expr

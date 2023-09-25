@@ -1,6 +1,8 @@
 #ifndef _TYPE_H
 #define _TYPE_H
 
+struct Token;
+
 enum TypeKind {TY_VOID, TY_POINTER, TY_FUNC, TY_CHAR};
 
 struct Type {
@@ -16,6 +18,6 @@ static struct Type type_char = {.name="char", .kind=TY_CHAR, .size=1};
 static struct Type* base_types[] = {&type_void, &type_char};
 
 struct Type* pointer_to(struct Type*);
-struct Type* get_common_type(struct Type*, struct Type*);
+struct Type* get_common_type(struct Token*, struct Type*, struct Type*);
 
 #endif

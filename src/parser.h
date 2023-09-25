@@ -32,8 +32,8 @@ struct Node {
             struct Symbol* symbol;
         } Variable;
         struct {
-            struct Node* variable;
-            struct Node* expr;
+            struct Node* left;
+            struct Node* right;
         } Assignment;
         struct {
             struct Node* left;

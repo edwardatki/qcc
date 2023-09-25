@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include "type.h"
 #include "messages.h"
 
@@ -14,10 +15,24 @@ struct Type* pointer_to(struct Type* base) {
     return type;
 }
 
-// TODO will have to determine a suitable type between left and right
-struct Type* get_common_type(struct Type* left, struct Type* right) {
+// Left is higher priority in I think all cases but need to double check
+struct Type* get_common_type(struct Token* token, struct Type* left, struct Type* right) {
+    // Promote char to pointer type
+    if ((left->kind == TY_POINTER) && (right->kind == TY_CHAR)) {
+        return left;
+    } /*else if ((left->kind == TY_CHAR) && (right->kind == TY_POINTER)) {
+        return right;
+    }*/
+    
     if (left->kind != right->kind) {
-        error(NULL, "incompatible types '%s' and '%s'", left->name, right->name);
+        error(token, "incompatible types '%s' and '%s'", left->name, right->name);
+    }
+
+    // Warn about changing pointer type
+    if ((left->base != NULL) && (right->base != NULL)) {
+        if (strcmp(left->base->name, right->base->name) != 0) {
+            warning(token, "assignment of incompatible pointer types '%s' and '%s'", left->name, right->name);
+        }
     }
     
     return left;
