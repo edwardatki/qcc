@@ -120,7 +120,11 @@ static struct Node* factor () {
         return node;
     } else if (peek(TK_NUMBER)) {
         struct Node* node = new_node(current_token, N_NUMBER);
-        node->type = &type_char; // TODO determine the correct data type from token value
+
+        int value = atoi(node->token->value);
+        if (value > 255) node->type = &type_int;
+        else node->type = &type_char;
+
         eat();
         return node;
     } else if (peek(TK_ID)) {

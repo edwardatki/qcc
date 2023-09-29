@@ -93,19 +93,23 @@ static void print_indent(int depth) {
     }
 }
 
-static struct Register* get_address(struct Node* node) {
+static struct Register* get_address(struct Node* node, int do_print) {
     struct Register* pointer_reg = allocate_reg(2);
 
     if (node->kind == N_VARIABLE) {
-        printf("%s\n", node->Variable.symbol->token->value);
+        if (do_print) printf("%s\n", node->Variable.symbol->token->value);
+
         if (node->Variable.symbol->global) {
             out_pointer += sprintf(out_pointer, "\tmov %s, %s\n", pointer_reg->name, node->Variable.symbol->token->value);
         } else {
             out_pointer += sprintf(out_pointer, "\tmov %s, sp+%d\n", pointer_reg->name, get_symbol_stack_offset(node->Variable.symbol, node->scope)+local_stack_usage);
         }
     } else if ((node->kind == N_UNARY) && (strcmp(node->token->value, "*") == 0)) {
-        printf("*%s\n", node->Variable.symbol->token->value);
-        error(node->token, "not yet implemented");
+        if (do_print) printf("*%s\n", node->Variable.symbol->token->value);
+
+        struct Register* temp_reg = get_address(node->UnaryOp.left, 0);
+        out_pointer += sprintf(out_pointer, "\tmov %s, [%s]\n", pointer_reg->name, temp_reg->name);
+        free_reg(temp_reg);
     } else {
         error(node->token, "lvalue required as left operand of assignment");
     }
@@ -165,7 +169,7 @@ static struct Register* visit_variable(struct Node* node, int depth) {
     print_indent(depth);
     printf("Variable: ");
 
-    struct Register* pointer_reg = get_address(node);
+    struct Register* pointer_reg = get_address(node, 1);
     struct Register* value_reg = allocate_reg(1);
 
     out_pointer += sprintf(out_pointer, "\tmov %s, [%s]\n", value_reg->name, pointer_reg->name);  
@@ -178,7 +182,7 @@ static void visit_assignment(struct Node* node, int depth) {
     print_indent(depth);
     printf("Assignment: ");
 
-    struct Register* pointer_reg = get_address(node->Assignment.left);
+    struct Register* pointer_reg = get_address(node->Assignment.left, 1);
     struct Register* value_reg = visit(node->Assignment.right, depth+1);
 
     out_pointer += sprintf(out_pointer, "\tmov [%s], %s\n", pointer_reg->name, value_reg->name);  
@@ -356,10 +360,9 @@ static struct Register* visit_unary_op(struct Node* node, int depth) {
         print_indent(depth+1);
         printf("Variable: ");
 
-        struct Register* pointer_reg = get_address(node->UnaryOp.left);
+        struct Register* pointer_reg = get_address(node, 1);
         struct Register* value_reg = allocate_reg(node->UnaryOp.left->Variable.symbol->type->base->size);
 
-        out_pointer += sprintf(out_pointer, "\tmov %s, [%s]\n", pointer_reg->name, pointer_reg->name); // Will need to implement this instruction or revisit this generation
         out_pointer += sprintf(out_pointer, "\tmov %s, [%s]\n", value_reg->name, pointer_reg->name);
         
         return value_reg;
@@ -370,7 +373,7 @@ static struct Register* visit_unary_op(struct Node* node, int depth) {
         print_indent(depth+1);
         printf("Variable: ");
 
-        struct Register* pointer_reg = get_address(node->UnaryOp.left);
+        struct Register* pointer_reg = get_address(node->UnaryOp.left, 1);
 
         return pointer_reg;
     } else {

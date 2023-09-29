@@ -1,18 +1,15 @@
 char main () {
-    char* pointer;
-    pointer = 36864; // 0x9000
+    char* terminal;
+    terminal = 32767; // 0x7fff
 
     char test;
     test = 0;
-
     while (test < 10) {
         test = test + 1;
-        char test;
+        *terminal = 33; // '!'
     }
 
-    // char* terminal;
-    // terminal = 32767 // 0x7fff
-    // *terminal = 33;
+    *terminal = 10; // '\n'
 
-    return test;
+    return 0;
 }
