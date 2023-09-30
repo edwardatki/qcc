@@ -121,7 +121,11 @@ static struct Node* factor () {
     } else if (peek(TK_NUMBER)) {
         struct Node* node = new_node(current_token, N_NUMBER);
 
-        int value = atoi(node->token->value);
+        char* end;
+        long value = strtol(node->token->value, &end, 0);
+        if (end == node->token->value) error(node->token, "unable to parse number");
+        if (*end != '\0') error(node->token, "unable to parse number");
+
         if (value > 255) node->type = &type_int;
         else node->type = &type_char;
 
@@ -392,13 +396,23 @@ static struct Node* function_decl() {
     return node;
 }
 
+// program : (function_decl | var_decl)*
+static struct Node* program () {
+    struct Node* node = new_node(current_token, N_PROGRAM);
+    node->type = &type_void;
+    while (!peek(TK_END)) {
+        add_node_list_entry(&node->Program.function_declarations, function_decl());
+    }
+    return node;
+}
+
 struct Node* parse(Token* first_token) {
     current_token = first_token;
 
     // Global scope
     enter_new_scope();
 
-    struct Node* root_node = function_decl();
+    struct Node* root_node = program();
     
     exit_scope();
 

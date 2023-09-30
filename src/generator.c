@@ -117,6 +117,13 @@ static struct Register* get_address(struct Node* node, int do_print) {
     return pointer_reg;
 }
 
+static void visit_program(struct Node* node, int depth) {
+    print_indent(depth);
+    printf("Program\n");
+
+    visit_all(node->Program.function_declarations, depth+1);
+}
+
 static void visit_var_decl(struct Node* node, int depth) {
     print_indent(depth);
     printf("Variable declaration: %s %s\n", node->VarDecl.symbol->type->name, node->VarDecl.symbol->token->value);
@@ -128,7 +135,7 @@ static void visit_var_decl(struct Node* node, int depth) {
 
 static void visit_func_decl(struct Node* node, int depth) {
     // Only bother with main for now
-    if (strcmp(node->token->value, "main") != 0) return;
+    // if (strcmp(node->token->value, "main") != 0) return;
 
     print_indent(depth);
     printf("Function declaration: %s %s\n", node->type->name, node->token->value);
@@ -493,6 +500,9 @@ static void visit_while(struct Node* node, int depth) {
 static struct Register* visit(struct Node* node, int depth) {
     printf("%s\t", node->type->name);
     switch (node->kind) {
+        case N_PROGRAM:
+            visit_program(node, depth);
+            return NULL;
         case N_VAR_DECL:
             visit_var_decl(node, depth);
             return NULL;
@@ -524,6 +534,7 @@ static struct Register* visit(struct Node* node, int depth) {
             return NULL;
     }
 
+    error(node->token, "invalid node kind");
     return NULL;
 }
 
@@ -537,7 +548,7 @@ char* generate(struct Node* root_node) {
     out_pointer += sprintf(out_pointer, "#include \"architecture.asm\"\n");
     out_pointer += sprintf(out_pointer, "#include \"print_functions.asm\"\n\n");
 
-    visit_func_decl(root_node, 0);
+    visit(root_node, 0);
     
     return out_buffer;
 }

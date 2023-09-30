@@ -6,7 +6,7 @@ struct Symbol;
 struct Type;
 struct Scope;
 
-enum NodeKind {N_TYPE, N_VAR_DECL, N_FUNC_DECL, N_BLOCK, N_VARIABLE, N_NUMBER, N_ASSIGNMENT, N_BINOP, N_UNARY, N_RETURN, N_IF, N_WHILE};
+enum NodeKind {N_TYPE, N_PROGRAM, N_VAR_DECL, N_FUNC_DECL, N_BLOCK, N_VARIABLE, N_NUMBER, N_ASSIGNMENT, N_BINOP, N_UNARY, N_RETURN, N_IF, N_WHILE};
 
 struct NodeListEntry;
 
@@ -17,6 +17,10 @@ struct Node {
     struct Scope* scope;
 
     union {
+        struct {
+            struct NodeListEntry* function_declarations;
+            struct NodeListEntry* global_variables;
+        } Program;
         struct {
             struct Symbol* symbol;
         } VarDecl;

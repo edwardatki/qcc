@@ -74,7 +74,8 @@ static void check_numeric(FILE* fp, char c) {
     int i = 0;
     while(1) {
         value[i++] = c;
-        if (!isdigit(peek(fp))) break;
+        // if (!isdigit(peek(fp))) break;
+        if (!isalnum(peek(fp))) break;
         c = next(fp);
     }
 
@@ -88,7 +89,7 @@ static void check_keyword(FILE* fp, char c) {
     int i = 0;
     while(1) {
         value[i++] = c;
-        if (!isalnum(peek(fp))) break;
+        if (!(isalnum(peek(fp)) || (peek(fp) == '_'))) break;
         c = next(fp);
     }
 
