@@ -133,10 +133,8 @@ static void visit_var_decl(struct Node* node, int depth) {
     // Will need to reserve space for global variables and track local variable's positions on the stack
 }
 
+// TODO need to preserve registers
 static void visit_func_decl(struct Node* node, int depth) {
-    // Only bother with main for now
-    // if (strcmp(node->token->value, "main") != 0) return;
-
     print_indent(depth);
     printf("Function declaration: %s %s\n", node->type->name, node->token->value);
 
@@ -401,7 +399,7 @@ static void visit_return(struct Node* node, int depth) {
 
     // TODO this needs account for returns from inside futher scopes
     // Restore stack
-    out_pointer += sprintf(out_pointer, "\tmov sp, sp+%d\n", node->scope->stack_size);
+    if (node->scope->stack_size != 0) out_pointer += sprintf(out_pointer, "\tmov sp, sp+%d\n", node->scope->stack_size);
 
     out_pointer += sprintf(out_pointer, "\tret\n");
     free_reg(reg);
@@ -497,6 +495,32 @@ static void visit_while(struct Node* node, int depth) {
     label_count++;
 }
 
+static struct Register* visit_func_call(struct Node* node, int depth) {
+    print_indent(depth);
+    printf("Call: %s\n", node->token->value);
+
+    // Push accumulator if necessary
+    int preserve_a = !registers[0].free;
+    if (preserve_a) {
+        out_pointer += sprintf(out_pointer, "\tpush a\n");
+        local_stack_usage += 1;
+    }
+
+    out_pointer += sprintf(out_pointer, "\tcall %s\n", node->token->value);
+
+    // Move result out of accumulator if necessary
+    struct Register* result_reg = allocate_reg(1);
+    if (preserve_a) out_pointer += sprintf(out_pointer, "\tmov %s, a\n", result_reg->name);
+
+    // Restore accumulator if necessary
+    if (preserve_a) {
+        out_pointer += sprintf(out_pointer, "\tpop a\n");
+        local_stack_usage -= 1;
+    }
+
+    return result_reg;
+}
+
 static struct Register* visit(struct Node* node, int depth) {
     printf("%s\t", node->type->name);
     switch (node->kind) {
@@ -532,6 +556,8 @@ static struct Register* visit(struct Node* node, int depth) {
         case N_WHILE:
             visit_while(node, depth);
             return NULL;
+        case N_FUNC_CALL:
+            return visit_func_call(node, depth);
     }
 
     error(node->token, "invalid node kind");

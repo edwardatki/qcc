@@ -6,7 +6,7 @@ struct Symbol;
 struct Type;
 struct Scope;
 
-enum NodeKind {N_TYPE, N_PROGRAM, N_VAR_DECL, N_FUNC_DECL, N_BLOCK, N_VARIABLE, N_NUMBER, N_ASSIGNMENT, N_BINOP, N_UNARY, N_RETURN, N_IF, N_WHILE};
+enum NodeKind {N_TYPE, N_PROGRAM, N_VAR_DECL, N_FUNC_DECL, N_BLOCK, N_VARIABLE, N_NUMBER, N_ASSIGNMENT, N_BINOP, N_UNARY, N_RETURN, N_IF, N_WHILE, N_FUNC_CALL};
 
 struct NodeListEntry;
 
@@ -59,6 +59,10 @@ struct Node {
             struct Node* expr;
             struct Node* loop_statement;
         } While;
+        struct {
+            struct Symbol* symbol;
+            struct NodeListEntry* parameters;
+        } FuncCall;
     };
 };
 

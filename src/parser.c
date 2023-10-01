@@ -77,7 +77,20 @@ static struct Node* new_node(struct Token* token, enum NodeKind kind) {
 
 static struct Node* expr();
 
-// factor : ((PLUS | MINUS) factor) | ((ASTERISK | AMPERSAND) variable) | NUMBER | ID | assignment | LPAREN expr RPAREN
+static struct Node* function_call() {
+    // Lookup symbol from current scope
+    struct Node* node = new_node(current_token, N_FUNC_CALL);
+    node->Variable.symbol = lookup_symbol(current_token);
+    node->type = node->Variable.symbol->type->base;
+    eat(TK_ID);
+
+    eat(TK_LPAREN);
+    eat(TK_RPAREN);
+
+    return node;
+}
+
+// factor : ((PLUS | MINUS) factor) | ((ASTERISK | AMPERSAND) variable) | NUMBER | ID | ID LPAREN (expr COMMA)* RPAREN | assignment | LPAREN expr RPAREN
 static struct Node* factor () {
     if (peek(TK_PLUS) || peek(TK_MINUS)) {
         struct Node* node = new_node(current_token, N_UNARY);
@@ -132,12 +145,17 @@ static struct Node* factor () {
         eat();
         return node;
     } else if (peek(TK_ID)) {
-        // Lookup symbol from current scope
-        struct Node* node = new_node(current_token, N_VARIABLE);
-        node->Variable.symbol = lookup_symbol(current_token);
-        node->type = node->Variable.symbol->type;
-        eat(TK_ID);
-        return node;
+        if (peek2(TK_LPAREN)) {
+            return function_call();
+        }
+        else {
+            // Lookup symbol from current scope
+            struct Node* node = new_node(current_token, N_VARIABLE);
+            node->Variable.symbol = lookup_symbol(current_token);
+            node->type = node->Variable.symbol->type;
+            eat(TK_ID);
+            return node;
+        }
     } else if (peek(TK_LPAREN)) {
         eat();
         struct Node* node = expr();
@@ -332,7 +350,6 @@ static struct Node* var_decl() {
 
     struct Symbol* symbol = calloc(1, sizeof(struct Symbol));
     symbol->type = symbolType;
-
     symbol->token = current_token;
 
     scope_add_symbol(symbol);
@@ -368,16 +385,43 @@ static struct Node* block() {
     return node;
 }
 
+// var_decl : type ID SEMICOLON
+// static struct Node* var_decl() {
+//     struct Type* symbolType = type();
+//     struct Node* node = new_node(current_token, N_VAR_DECL);
+
+//     struct Symbol* symbol = calloc(1, sizeof(struct Symbol));
+//     symbol->type = symbolType;
+
+//     symbol->token = current_token;
+
+//     scope_add_symbol(symbol);
+
+//     node->VarDecl.symbol = symbol;
+//     node->type = symbol->type;
+    
+//     eat_kind(TK_ID);
+//     return node;
+// }
+
 // Probably should be a list of statements rather than a block, would make code generation a bit neater
 // function_decl : type ID LPAREN (FORMAL_PARAMETERS)? RPAREN block
 static struct Node* function_decl() {
-    enter_new_scope();
 
-    struct Type* symbolType = type();
+    struct Type* symbolType = function_of(type());
     struct Node* node = new_node(current_token, N_FUNC_DECL);
     node->type = symbolType;
+
+    struct Symbol* symbol = calloc(1, sizeof(struct Symbol));
+    symbol->type = symbolType;
+    symbol->token = current_token;
+
+    scope_add_symbol(symbol);
+
     eat_kind(TK_ID);
     eat_kind(TK_LPAREN);
+
+    enter_new_scope();
 
     if (!peek(TK_RPAREN)) {
         add_node_list_entry(&node->FunctionDecl.formal_parameters, var_decl());
@@ -388,6 +432,8 @@ static struct Node* function_decl() {
     }
 
     eat_kind(TK_RPAREN);
+
+    get_current_scope()->stack_size += 2; // Return address
 
     node->FunctionDecl.block = block();
 

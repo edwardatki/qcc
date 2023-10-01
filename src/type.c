@@ -15,6 +15,17 @@ struct Type* pointer_to(struct Type* base) {
     return type;
 }
 
+// TODO somehow keep track of parameters
+struct Type* function_of(struct Type* base) {
+    struct Type *type = calloc(1, sizeof(struct Type));
+    type->name = calloc(32, sizeof(char));
+    sprintf(type->name, "%s(*)", base->name);
+    type->kind = TY_FUNC;
+    type->size = 2;
+    type->base = base;
+    return type;
+}
+
 // Get lowest common denominator type
 // TODO surely I need to generate code to convert between types here, hmmmm
 struct Type* get_common_type(struct Token* token, struct Type* left, struct Type* right) {
