@@ -20,7 +20,7 @@ static struct Register* visit_bin_op(struct Node*, int);
 static void visit_return(struct Node*, int);
 static struct Register* visit(struct Node*, int);
 
-static char out_buffer [1024];
+static char out_buffer [8192]; // TODO just write directly to file pointer
 static char* out_pointer = out_buffer;
 
 int local_stack_usage = 0;
@@ -93,23 +93,25 @@ static void print_indent(int depth) {
     }
 }
 
-static struct Register* get_address(struct Node* node, int do_print) {
-    struct Register* pointer_reg = allocate_reg(2);
+static struct Register* get_address(struct Node* node, int depth) {
+    struct Register* pointer_reg;
 
     if (node->kind == N_VARIABLE) {
-        if (do_print) printf("%s\n", node->Variable.symbol->token->value);
+        printf("%s\n", node->Variable.symbol->token->value);
 
+        pointer_reg = allocate_reg(2);
         if (node->Variable.symbol->global) {
             out_pointer += sprintf(out_pointer, "\tmov %s, %s\n", pointer_reg->name, node->Variable.symbol->token->value);
         } else {
-            out_pointer += sprintf(out_pointer, "\tmov %s, sp+%d\n", pointer_reg->name, get_symbol_stack_offset(node->Variable.symbol, node->scope)+local_stack_usage);
+            out_pointer += sprintf(out_pointer, "\tmov %s, sp+%d ; %s\n", pointer_reg->name, get_symbol_stack_offset(node->Variable.symbol, node->scope)+local_stack_usage, node->Variable.symbol->token->value);
         }
     } else if ((node->kind == N_UNARY) && (strcmp(node->token->value, "*") == 0)) {
-        if (do_print) printf("*%s\n", node->Variable.symbol->token->value);
+        printf("\n");
+        printf("%s\t", node->type->name);
+        print_indent(depth+1);
+        printf("UnaryOp: *\n");
 
-        struct Register* temp_reg = get_address(node->UnaryOp.left, 0);
-        out_pointer += sprintf(out_pointer, "\tmov %s, [%s]\n", pointer_reg->name, temp_reg->name);
-        free_reg(temp_reg);
+        pointer_reg = visit(node->UnaryOp.left, depth+2);
     } else {
         error(node->token, "lvalue required as left operand of assignment");
     }
@@ -174,12 +176,12 @@ static struct Register* visit_variable(struct Node* node, int depth) {
     print_indent(depth);
     printf("Variable: ");
 
-    struct Register* pointer_reg = get_address(node, 1);
-    struct Register* value_reg = allocate_reg(1);
+    struct Register* pointer_reg = get_address(node, depth);
+    free_reg(pointer_reg);
+    struct Register* value_reg = allocate_reg(node->type->size);
 
     out_pointer += sprintf(out_pointer, "\tmov %s, [%s]\n", value_reg->name, pointer_reg->name);  
 
-    free_reg(pointer_reg);
     return value_reg;
 }
 
@@ -187,7 +189,7 @@ static void visit_assignment(struct Node* node, int depth) {
     print_indent(depth);
     printf("Assignment: ");
 
-    struct Register* pointer_reg = get_address(node->Assignment.left, 1);
+    struct Register* pointer_reg = get_address(node->Assignment.left, depth);
     struct Register* value_reg = visit(node->Assignment.right, depth+1);
 
     out_pointer += sprintf(out_pointer, "\tmov [%s], %s\n", pointer_reg->name, value_reg->name);  
@@ -365,7 +367,8 @@ static struct Register* visit_unary_op(struct Node* node, int depth) {
         print_indent(depth+1);
         printf("Variable: ");
 
-        struct Register* pointer_reg = get_address(node, 1);
+        struct Register* pointer_reg = get_address(node, depth);
+        free_reg(pointer_reg);
         struct Register* value_reg = allocate_reg(node->UnaryOp.left->Variable.symbol->type->base->size);
 
         out_pointer += sprintf(out_pointer, "\tmov %s, [%s]\n", value_reg->name, pointer_reg->name);
@@ -378,7 +381,7 @@ static struct Register* visit_unary_op(struct Node* node, int depth) {
         print_indent(depth+1);
         printf("Variable: ");
 
-        struct Register* pointer_reg = get_address(node->UnaryOp.left, 1);
+        struct Register* pointer_reg = get_address(node->UnaryOp.left, depth);
 
         return pointer_reg;
     } else {
@@ -566,13 +569,11 @@ static struct Register* visit(struct Node* node, int depth) {
 
 char* generate(struct Node* root_node) {
     // Program entry code
+    out_pointer += sprintf(out_pointer, "#include \"architecture.asm\"\n\n");
     out_pointer += sprintf(out_pointer, "#bank RAM\n\n");
-    out_pointer += sprintf(out_pointer, "mov sp, 0x7fff\n");
+    out_pointer += sprintf(out_pointer, "#addr 0x8100\n\n");
     out_pointer += sprintf(out_pointer, "call main\n");
-    out_pointer += sprintf(out_pointer, "call print_u8_dec\n");
-    out_pointer += sprintf(out_pointer, "jmp $\n\n");
-    out_pointer += sprintf(out_pointer, "#include \"architecture.asm\"\n");
-    out_pointer += sprintf(out_pointer, "#include \"print_functions.asm\"\n\n");
+    out_pointer += sprintf(out_pointer, "ret\n\n");
 
     visit(root_node, 0);
     

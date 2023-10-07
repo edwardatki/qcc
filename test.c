@@ -1,5 +1,5 @@
 char asdf() {
-    int i;
+    char i;
     i = 7;
     return i;
 }
@@ -11,20 +11,21 @@ char asdf() {
 // }
 
 char main() {
-    // char* terminal;
-    // terminal = 0x7fff;
+    char* terminal;
+    terminal = 0x7fff;
 
-    // char test;
-    // test = 0;
-    // while (test < 10) {
-    //     test = test + 1;
-    //     *terminal = 0x21; // '!'
-    // }
+    char test;
+    test = 0;
+    while (test < 10) {
+        char c;
+        c = *terminal;
+        if (c != 0) {
+            test = test + 1;
+            *terminal = c;
+        }
+    }
 
-    // *terminal = 0x0a; // '\n'
+    *terminal = 0x0a; // '\n'
 
-    char i;
-    i = asdf();
-
-    return i;
+    return asdf();
 }
