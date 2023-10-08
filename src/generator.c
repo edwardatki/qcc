@@ -97,7 +97,9 @@ static struct Register* get_address(struct Node* node, int depth) {
     struct Register* pointer_reg;
 
     if (node->kind == N_VARIABLE) {
-        printf("%s\n", node->Variable.symbol->token->value);
+        printf("%s\t", node->type->name);
+        print_indent(depth);
+        printf("Variable: %s\n", node->Assignment.left->token->value);
 
         pointer_reg = allocate_reg(2);
         if (node->Variable.symbol->global) {
@@ -106,12 +108,11 @@ static struct Register* get_address(struct Node* node, int depth) {
             out_pointer += sprintf(out_pointer, "\tmov %s, sp+%d ; %s\n", pointer_reg->name, get_symbol_stack_offset(node->Variable.symbol, node->scope)+local_stack_usage, node->Variable.symbol->token->value);
         }
     } else if ((node->kind == N_UNARY) && (strcmp(node->token->value, "*") == 0)) {
-        printf("\n");
         printf("%s\t", node->type->name);
-        print_indent(depth+1);
+        print_indent(depth);
         printf("UnaryOp: *\n");
 
-        pointer_reg = visit(node->UnaryOp.left, depth+2);
+        pointer_reg = visit(node->UnaryOp.left, depth+1);
     } else {
         error(node->token, "lvalue required as left operand of assignment");
     }
@@ -120,6 +121,7 @@ static struct Register* get_address(struct Node* node, int depth) {
 }
 
 static void visit_program(struct Node* node, int depth) {
+    printf("%s\t", node->type->name);
     print_indent(depth);
     printf("Program\n");
 
@@ -127,16 +129,19 @@ static void visit_program(struct Node* node, int depth) {
 }
 
 static void visit_var_decl(struct Node* node, int depth) {
+    printf("%s\t", node->type->name);
     print_indent(depth);
     printf("Variable declaration: %s %s\n", node->VarDecl.symbol->type->name, node->VarDecl.symbol->token->value);
     
     struct Symbol* symbol = node->VarDecl.symbol;
 
     // Will need to reserve space for global variables and track local variable's positions on the stack
+    if (symbol->global) printf("FUCK\n");
 }
 
 // TODO need to preserve registers
 static void visit_func_decl(struct Node* node, int depth) {
+    printf("%s\t", node->type->name);
     print_indent(depth);
     printf("Function declaration: %s %s\n", node->type->name, node->token->value);
 
@@ -150,6 +155,7 @@ static void visit_func_decl(struct Node* node, int depth) {
 }
 
 static void visit_block(struct Node* node, int depth) {
+    printf("%s\t", node->type->name);
     print_indent(depth);
     printf("Block\n");
 
@@ -164,6 +170,7 @@ static void visit_block(struct Node* node, int depth) {
 }
 
 static struct Register* visit_number(struct Node* node, int depth) {
+    printf("%s\t", node->type->name);
     print_indent(depth);
     printf("Number: %s\n", node->token->value);
 
@@ -173,24 +180,41 @@ static struct Register* visit_number(struct Node* node, int depth) {
 }
 
 static struct Register* visit_variable(struct Node* node, int depth) {
-    print_indent(depth);
-    printf("Variable: ");
+    // printf("%s\t", node->type->name);
+    // print_indent(depth);
+    // printf("Variable: %s\n", node->token->value);
 
     struct Register* pointer_reg = get_address(node, depth);
-    free_reg(pointer_reg);
     struct Register* value_reg = allocate_reg(node->type->size);
 
-    out_pointer += sprintf(out_pointer, "\tmov %s, [%s]\n", value_reg->name, pointer_reg->name);  
+    out_pointer += sprintf(out_pointer, "\tmov %s, [%s]\n", value_reg->name, pointer_reg->name);
+
+    free_reg(pointer_reg);
 
     return value_reg;
 }
 
-static void visit_assignment(struct Node* node, int depth) {
-    print_indent(depth);
-    printf("Assignment: ");
+static struct Register* cast(struct Register* reg, struct Type* from_type, struct Type* to_type) {
+    struct Register* original_reg = reg;
+    free_reg(reg);
+    reg = allocate_reg(to_type->size);
 
-    struct Register* pointer_reg = get_address(node->Assignment.left, depth);
+    if ((from_type->kind == TY_INT) && (to_type->kind == TY_CHAR)) out_pointer += sprintf(out_pointer, "\tmov %s, %s ; (%s)\n", reg->name, original_reg->sub_reg[1]->name, to_type->name);
+    if ((from_type->kind == TY_CHAR) && (to_type->kind == TY_INT)) out_pointer += sprintf(out_pointer, "\tmov %s, 0 ; (%s)\n\tmov %s, %s\n", reg->sub_reg[0]->name, to_type->name, reg->sub_reg[1]->name, original_reg->name);
+
+    return reg;
+}
+
+static void visit_assignment(struct Node* node, int depth) {
+    printf("%s\t", node->type->name);
+    print_indent(depth);
+    // printf("Assignment: %s\n", node->Assignment.left->token->value);
+    printf("Assignment:\n");
+
     struct Register* value_reg = visit(node->Assignment.right, depth+1);
+    struct Register* pointer_reg = get_address(node->Assignment.left, depth+1);
+
+    value_reg = cast(value_reg, node->Assignment.right->type, node->Assignment.left->type);
 
     out_pointer += sprintf(out_pointer, "\tmov [%s], %s\n", pointer_reg->name, value_reg->name);  
     
@@ -199,6 +223,7 @@ static void visit_assignment(struct Node* node, int depth) {
 }
 
 static struct Register* visit_bin_op(struct Node* node, int depth) {
+    printf("%s\t", node->type->name);
     print_indent(depth);
     printf("BinOp: %s\n", node->token->value);
 
@@ -207,7 +232,7 @@ static struct Register* visit_bin_op(struct Node* node, int depth) {
 
     // Can only do 8-bit operations for now
     if ((left_reg->size > 1) | (right_reg->size > 1)) {
-        error(node->UnaryOp.left->token, "only 8-bit operations supported for now");
+        error(node->token, "only 8-bit operations supported for now");
     }
 
     // Push accumulator if necessary
@@ -331,20 +356,25 @@ static struct Register* visit_bin_op(struct Node* node, int depth) {
 }
 
 static struct Register* visit_unary_op(struct Node* node, int depth) {
-    print_indent(depth);
-    printf("UnaryOp: %s\n", node->token->value);
-
     // Perform operation
     if (strcmp(node->token->value, "+") == 0) {
+        printf("%s\t", node->type->name);
+        print_indent(depth);
+        printf("UnaryOp: %s\n", node->token->value);
+
         // Don't need to do anything here
         struct Register* left_reg = visit(node->UnaryOp.left, depth+1);
         return left_reg;
     } else if (strcmp(node->token->value, "-") == 0) {
+        printf("%s\t", node->type->name);
+        print_indent(depth);
+        printf("UnaryOp: %s\n", node->token->value);
+
         struct Register* left_reg = visit(node->UnaryOp.left, depth+1);
 
         // Can only do 8-bit operations for now
         if (left_reg->size > 1) {
-            error(node->UnaryOp.left->token, "only 8-bit operations supported for now");
+            error(node->token, "only 8-bit operations supported for now");
         }
 
         // Move left out of accumulator if necessary
@@ -363,10 +393,6 @@ static struct Register* visit_unary_op(struct Node* node, int depth) {
 
         return left_reg;
     } else if (strcmp(node->token->value, "*") == 0) {
-        printf("%s\t", node->UnaryOp.left->type->name);
-        print_indent(depth+1);
-        printf("Variable: ");
-
         struct Register* pointer_reg = get_address(node, depth);
         free_reg(pointer_reg);
         struct Register* value_reg = allocate_reg(node->UnaryOp.left->Variable.symbol->type->base->size);
@@ -375,22 +401,20 @@ static struct Register* visit_unary_op(struct Node* node, int depth) {
         
         return value_reg;
     } else if (strcmp(node->token->value, "&") == 0) {
-        // struct Symbol* symbol = node->UnaryOp.left->Variable.symbol;
+        printf("%s\t", node->type->name);
+        print_indent(depth);
+        printf("UnaryOp: %s\n", node->token->value);
 
-        printf("%s\t", node->UnaryOp.left->type->name);
-        print_indent(depth+1);
-        printf("Variable: ");
-
-        struct Register* pointer_reg = get_address(node->UnaryOp.left, depth);
+        struct Register* pointer_reg = get_address(node->UnaryOp.left, depth+1);
 
         return pointer_reg;
     } else {
-        out_pointer += sprintf(out_pointer, "\t???\n");
-        return NULL;
+        error(node->token, "invalid unary operator");
     }
 }
 
 static void visit_return(struct Node* node, int depth) {
+    printf("%s\t", node->type->name);
     print_indent(depth);
     printf("Return\n");
 
@@ -409,6 +433,7 @@ static void visit_return(struct Node* node, int depth) {
 }
 
 static void visit_if(struct Node* node, int depth) {
+    printf("%s\t", node->type->name);
     print_indent(depth);
     printf("If\n");
 
@@ -454,6 +479,7 @@ static void visit_if(struct Node* node, int depth) {
 }
 
 static void visit_while(struct Node* node, int depth) {
+    printf("%s\t", node->type->name);
     print_indent(depth);
     printf("While\n");
 
@@ -499,6 +525,7 @@ static void visit_while(struct Node* node, int depth) {
 }
 
 static struct Register* visit_func_call(struct Node* node, int depth) {
+    printf("%s\t", node->type->name);
     print_indent(depth);
     printf("Call: %s\n", node->token->value);
 
@@ -525,7 +552,6 @@ static struct Register* visit_func_call(struct Node* node, int depth) {
 }
 
 static struct Register* visit(struct Node* node, int depth) {
-    printf("%s\t", node->type->name);
     switch (node->kind) {
         case N_PROGRAM:
             visit_program(node, depth);

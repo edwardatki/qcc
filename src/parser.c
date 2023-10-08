@@ -54,7 +54,7 @@ static void add_node_list_entry(struct NodeListEntry** root_entry, struct Node* 
     struct NodeListEntry* current_entry = *root_entry;
 
     *root_entry = current_entry;
- 
+
     // Travel to end of list
     while (current_entry->next != NULL) {
         current_entry = current_entry->next;
@@ -76,6 +76,7 @@ static struct Node* new_node(struct Token* token, enum NodeKind kind) {
 }
 
 static struct Node* expr();
+static struct Node* additive_expr();
 
 static struct Node* function_call() {
     // Lookup symbol from current scope
@@ -90,7 +91,7 @@ static struct Node* function_call() {
     return node;
 }
 
-// factor : ((PLUS | MINUS) factor) | ((ASTERISK | AMPERSAND) variable) | NUMBER | ID | ID LPAREN (expr COMMA)* RPAREN | assignment | LPAREN expr RPAREN
+// factor : ((PLUS | MINUS) factor) | (AMPERSAND) variable | ASTERISK additive_expr| NUMBER | ID | ID LPAREN (expr COMMA)* RPAREN | assignment | LPAREN expr RPAREN
 static struct Node* factor () {
     if (peek(TK_PLUS) || peek(TK_MINUS)) {
         struct Node* node = new_node(current_token, N_UNARY);
@@ -98,13 +99,7 @@ static struct Node* factor () {
         node->UnaryOp.left = factor();
         node->type = node->UnaryOp.left->type;
         return node;
-    } else if (peek(TK_ASTERISK) || peek(TK_AMPERSAND)) {
-        // TODO this won't allow something like *(pointer + 1)
-        // Should use an expr (maybe starting at additive_expr actually) instead of a just variable
-
-        int must_be_pointer = 0;
-        if (peek(TK_ASTERISK)) must_be_pointer = 1;
-
+    } else if (peek(TK_AMPERSAND)) {
         struct Node* node = new_node(current_token, N_UNARY);
         eat();
 
@@ -112,23 +107,29 @@ static struct Node* factor () {
         if (!peek(TK_ID)) eat_kind(TK_ID);
 
         // Lookup symbol from current scope
-        struct Node* variable_node = new_node(current_token, N_VARIABLE);
-        variable_node->Variable.symbol = lookup_symbol(current_token);
-        variable_node->type = variable_node->Variable.symbol->type;
-
-        // Must be a pointer to be dereferenced
-        if (must_be_pointer) {
-            if (variable_node->Variable.symbol->type->kind != TY_POINTER) {
-                error(variable_node->token, "left must be a pointer");
-            }
-        }
-
+        struct Node* left_node = new_node(current_token, N_VARIABLE);
+        left_node->Variable.symbol = lookup_symbol(current_token);
+        left_node->type = left_node->Variable.symbol->type;
         eat(TK_ID);
 
-        node->UnaryOp.left = variable_node;
+        node->UnaryOp.left = left_node;
 
-        if (must_be_pointer) node->type = node->UnaryOp.left->type->base;
-        else node->type = pointer_to(node->UnaryOp.left->type);
+        node->type = pointer_to(node->UnaryOp.left->type);
+
+        return node;
+    } else if (peek(TK_ASTERISK)) {
+        struct Node* node = new_node(current_token, N_UNARY);
+        eat();
+
+        struct Node* left_node = additive_expr();
+
+        if (left_node->type->kind != TY_POINTER) {
+            error(left_node->token, "left must be a pointer");
+        }
+
+        node->UnaryOp.left = left_node;
+
+        node->type = node->UnaryOp.left->type->base;
 
         return node;
     } else if (peek(TK_NUMBER)) {
@@ -154,6 +155,7 @@ static struct Node* factor () {
             node->Variable.symbol = lookup_symbol(current_token);
             node->type = node->Variable.symbol->type;
             eat(TK_ID);
+
             return node;
         }
     } else if (peek(TK_LPAREN)) {
@@ -385,25 +387,6 @@ static struct Node* block() {
     return node;
 }
 
-// var_decl : type ID SEMICOLON
-// static struct Node* var_decl() {
-//     struct Type* symbolType = type();
-//     struct Node* node = new_node(current_token, N_VAR_DECL);
-
-//     struct Symbol* symbol = calloc(1, sizeof(struct Symbol));
-//     symbol->type = symbolType;
-
-//     symbol->token = current_token;
-
-//     scope_add_symbol(symbol);
-
-//     node->VarDecl.symbol = symbol;
-//     node->type = symbol->type;
-    
-//     eat_kind(TK_ID);
-//     return node;
-// }
-
 // Probably should be a list of statements rather than a block, would make code generation a bit neater
 // function_decl : type ID LPAREN (FORMAL_PARAMETERS)? RPAREN block
 static struct Node* function_decl() {
@@ -448,6 +431,7 @@ static struct Node* program () {
     node->type = &type_void;
     while (!peek(TK_END)) {
         add_node_list_entry(&node->Program.function_declarations, function_decl());
+        // TODO global variable declarations
     }
     return node;
 }
