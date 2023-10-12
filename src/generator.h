@@ -3,6 +3,6 @@
 
 struct Node;
 
-char* generate(struct Node*);
+void generate(struct Node*, char*);
 
 #endif

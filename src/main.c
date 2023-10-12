@@ -25,6 +25,7 @@ int main(int argc, char **argv) {
     }
     
     if (input_filename == NULL) error(NULL, "no input file supplied");
+    if (output_filename == NULL) output_filename = "out.asm";
 
     // Lex
     struct Token* first_token = lex(input_filename);
@@ -33,14 +34,7 @@ int main(int argc, char **argv) {
     struct Node* root_node = parse(first_token);
     
     // Generate code
-    char* result = generate(root_node);
-
-    // Write to output file
-    if (output_filename == NULL) output_filename = "out.asm";
-    FILE *output_file;
-    output_file = fopen(output_filename, "w");
-    fprintf(output_file, "%s", result);
-    fclose(output_file);
+    generate(root_node, output_filename);
 
     return EXIT_SUCCESS;
 }
