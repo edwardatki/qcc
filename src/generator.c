@@ -12,13 +12,13 @@
 
 int local_stack_usage = 0;
 
-static struct Register registers[] = { {.name="a", .size=1, .free=1, .sub_reg={NULL, NULL}},
-                                    {.name="b", .size=1, .free=1, .sub_reg={NULL, NULL}},
-                                    {.name="c", .size=1, .free=1, .sub_reg={NULL, NULL}},
-                                    {.name="d", .size=1, .free=1, .sub_reg={NULL, NULL}},
-                                    {.name="e", .size=1, .free=1, .sub_reg={NULL, NULL}},
-                                    {.name="bc", .size=2, .free=1, .sub_reg={&registers[1], &registers[2]}},
-                                    {.name="de", .size=2, .free=1, .sub_reg={&registers[3], &registers[4]}}};
+static struct Register registers[] = { {.name="a", .size=1, .free=1, .high_reg=NULL, .low_reg=NULL},
+                                    {.name="b", .size=1, .free=1, .high_reg=NULL, .low_reg=NULL},
+                                    {.name="c", .size=1, .free=1, .high_reg=NULL, .low_reg=NULL},
+                                    {.name="d", .size=1, .free=1, .high_reg=NULL, .low_reg=NULL},
+                                    {.name="e", .size=1, .free=1, .high_reg=NULL, .low_reg=NULL},
+                                    {.name="bc", .size=2, .free=1, .high_reg=&registers[1], .low_reg=&registers[2]},
+                                    {.name="de", .size=2, .free=1, .high_reg=&registers[3], .low_reg=&registers[4]}};
 
 static struct Register* allocate_reg(int size) {
     for (int i = 0; i < sizeof(registers)/sizeof(struct Register); i++) {
@@ -26,15 +26,15 @@ static struct Register* allocate_reg(int size) {
         struct Register* reg = &registers[i];
         if ((reg->size >= size) && reg->free) {
             // If sub registers are in use then can't allocate
-            if ((reg->sub_reg[0] != NULL) && !reg->sub_reg[0]->free) continue;
-            if ((reg->sub_reg[1] != NULL) && !reg->sub_reg[1]->free) continue;
+            if ((reg->high_reg != NULL) && !reg->high_reg->free) continue;
+            if ((reg->low_reg != NULL) && !reg->low_reg->free) continue;
 
             // Mark register as used
             reg->free = 0;
 
             // Mark sub registers as used too
-            if (reg->sub_reg[0] != NULL) reg->sub_reg[0]->free = 0;
-            if (reg->sub_reg[1] != NULL) reg->sub_reg[1]->free = 0;
+            if (reg->high_reg != NULL) reg->high_reg->free = 0;
+            if (reg->low_reg != NULL) reg->low_reg->free = 0;
 
             // printf("ALLOCATED REGISTER %s\n", reg->name);
             return reg;
@@ -58,8 +58,8 @@ static void free_reg(struct Register* reg) {
     reg->free = 1;
 
     // Mark sub registers as free too
-    if (reg->sub_reg[0] != NULL) reg->sub_reg[0]->free = 1;
-    if (reg->sub_reg[1] != NULL) reg->sub_reg[1]->free = 1;
+    if (reg->high_reg != NULL) reg->high_reg->free = 1;
+    if (reg->low_reg != NULL) reg->low_reg->free = 1;
 
     // printf("FREED REGISTER %s\n", reg->name);
 }
@@ -188,8 +188,8 @@ static struct Register* cast(struct Register* reg, struct Type* from_type, struc
     free_reg(reg);
     reg = allocate_reg(to_type->size);
 
-    if ((from_type->kind == TY_INT) && (to_type->kind == TY_CHAR)) fprintf(fp, "\tmov %s, %s ; (%s)\n", reg->name, original_reg->sub_reg[1]->name, to_type->name);
-    if ((from_type->kind == TY_CHAR) && (to_type->kind == TY_INT)) fprintf(fp, "\tmov %s, 0 ; (%s)\n\tmov %s, %s\n", reg->sub_reg[0]->name, to_type->name, reg->sub_reg[1]->name, original_reg->name);
+    if ((from_type->kind == TY_INT) && (to_type->kind == TY_CHAR)) fprintf(fp, "\tmov %s, %s ; (%s)\n", reg->name, original_reg->high_reg->name, to_type->name);
+    if ((from_type->kind == TY_CHAR) && (to_type->kind == TY_INT)) fprintf(fp, "\tmov %s, 0 ; (%s)\n\tmov %s, %s\n", reg->high_reg->name, to_type->name, reg->low_reg->name, original_reg->name);
 
     return reg;
 }
