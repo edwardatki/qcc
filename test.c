@@ -1,17 +1,13 @@
+char* terminal;
+
 char asdf() {
     char i;
     i = 7;
+    *terminal = 0x21;
     return i;
 }
 
-// void put_char(char c) {
-//     char* terminal;
-//     terminal = 0x7fff;
-//     *terminal = c;
-// }
-
 char main() {
-    char* terminal;
     terminal = 0x7fff;
 
     char test;
@@ -25,7 +21,10 @@ char main() {
         }
     }
 
+    char x;
+    x = asdf();
+
     *terminal = 0x0a; // '\n'
 
-    return asdf();
+    return x;
 }

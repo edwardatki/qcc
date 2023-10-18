@@ -115,17 +115,20 @@ static void visit_program(struct Node* node, FILE *fp, int depth) {
     printf("Program\n");
 
     visit_all(node->Program.function_declarations, fp, depth+1);
+    visit_all(node->Program.global_variables, fp, depth+1);
 }
 
 static void visit_var_decl(struct Node* node, FILE *fp, int depth) {
     printf("%s\t", node->type->name);
     print_indent(depth);
-    printf("Variable declaration: %s %s\n", node->VarDecl.symbol->type->name, node->VarDecl.symbol->token->value);
+    printf("Variable declaration: %s\n", node->VarDecl.symbol->token->value);
     
     struct Symbol* symbol = node->VarDecl.symbol;
 
-    // Will need to reserve space for global variables and track local variable's positions on the stack
-    if (symbol->global) printf("FUCK\n");
+    if (symbol->global) {
+        fprintf(fp, "%s:\n", node->token->value);
+        fprintf(fp, "\t#res %d\n", node->type->size);
+    }
 }
 
 // TODO need to preserve registers

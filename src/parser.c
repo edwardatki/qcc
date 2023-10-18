@@ -21,6 +21,10 @@ static int peek2(enum TokenKind kind) {
     return current_token->next->kind == kind;
 }
 
+static int peek3(enum TokenKind kind) {
+    return current_token->next->next->kind == kind;
+}
+
 static void eat() {
     if (current_token->kind == TK_END) {
         error(current_token, "unexpected end of tokens");
@@ -430,8 +434,12 @@ static struct Node* program () {
     struct Node* node = new_node(current_token, N_PROGRAM);
     node->type = &type_void;
     while (!peek(TK_END)) {
-        add_node_list_entry(&node->Program.function_declarations, function_decl());
-        // TODO global variable declarations
+        if (peek3(TK_LPAREN)) {
+            add_node_list_entry(&node->Program.function_declarations, function_decl());
+        } else {
+            add_node_list_entry(&node->Program.global_variables, var_decl());
+            eat(TK_SEMICOLON);
+        }
     }
     return node;
 }
