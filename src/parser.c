@@ -139,13 +139,21 @@ static struct Node* factor () {
     } else if (peek(TK_NUMBER)) {
         struct Node* node = new_node(current_token, N_NUMBER);
 
-        char* end;
-        long value = strtol(node->token->value, &end, 0);
-        if (end == node->token->value) error(node->token, "unable to parse number");
-        if (*end != '\0') error(node->token, "unable to parse number");
+        if (node->token->value[0] == '\'') {
+            node->token->value[0] = '\"';
+            int i = 1;
+            while (node->token->value[i] != '\'') i++;
+            node->token->value[i] = '\"';
+            node->type = &type_char;
+        } else {
+            char* end;
+            long value = strtol(node->token->value, &end, 0);
+            if (end == node->token->value) error(node->token, "unable to parse number");
+            if (*end != '\0') error(node->token, "unable to parse number");
 
-        if (value > 255) node->type = &type_int;
-        else node->type = &type_char;
+            if (value > 255) node->type = &type_int;
+            else node->type = &type_char;
+        }
 
         eat();
         return node;

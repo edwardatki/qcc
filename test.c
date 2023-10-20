@@ -3,12 +3,12 @@ char* terminal;
 char asdf() {
     char i;
     i = 7;
-    *terminal = 0x21;
+    *terminal = '!';
     return i;
 }
 
 char main() {
-    terminal = 0x7fff;
+    terminal = 0x7fff; 
 
     char test;
     test = 0;
@@ -24,7 +24,7 @@ char main() {
     char x;
     x = asdf();
 
-    *terminal = 0x0a; // '\n'
+    *terminal = '\n';
 
     return x;
 }

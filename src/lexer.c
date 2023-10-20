@@ -67,6 +67,20 @@ char* get_line(int index) {
     return line;
 }
 
+static void check_char_literal(FILE* fp, char c) {
+    int start_column = current_column;
+
+    char* value = calloc(32, sizeof(char));
+    int i = 0;
+    value[i++] = c;
+    while(1) {
+        c = next(fp);
+        value[i++] = c;
+        if (c == '\'') break;
+    }
+
+    add_token(TK_NUMBER, value, current_line, start_column);
+}
 static void check_numeric(FILE* fp, char c) {
     int start_column = current_column;
 
@@ -126,7 +140,10 @@ struct Token* lex(char* _filename) {
         if (c =='\n') {
             current_line++;
             current_column = 0;
+            continue;
         }
+
+        if (c == '\r') continue;
 
         // Exit at end of file
         if (c == EOF) {
@@ -170,6 +187,10 @@ struct Token* lex(char* _filename) {
         // Check multi character tokens
         if (isdigit(c)) {check_numeric(fp, c); continue;}
         if (isalpha(c)) {check_keyword(fp, c); continue;}
+        if (c == '\'') {check_char_literal(fp, c); continue;}
+
+        printf("%s:%d:%d: ", filename, current_line, current_column); 
+        error(NULL, "unrecognized token");
     }
 
     fclose(fp);
