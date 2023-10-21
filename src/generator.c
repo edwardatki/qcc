@@ -114,8 +114,22 @@ static void visit_program(struct Node* node, FILE *fp, int depth) {
     print_indent(depth);
     printf("Program\n");
 
-    visit_all(node->Program.function_declarations, fp, depth+1);
+    // Program setup
+    fprintf(fp, "#include \"architecture.asm\"\n\n");
+    fprintf(fp, "#bank RAM\n\n");
+    fprintf(fp, "#addr 0x8100\n\n");
+
+    fprintf(fp, "_start:\n");
+
+    // Initialise global variables
     visit_all(node->Program.global_variables, fp, depth+1);
+
+    // Call main
+    fprintf(fp, "\tcall main\n");
+    fprintf(fp, "\tret\n\n");
+
+    // Generate code for all functions
+    visit_all(node->Program.function_declarations, fp, depth+1);
 }
 
 static void visit_var_decl(struct Node* node, FILE *fp, int depth) {
@@ -123,9 +137,14 @@ static void visit_var_decl(struct Node* node, FILE *fp, int depth) {
     print_indent(depth);
     printf("Variable declaration: %s\n", node->VarDecl.symbol->token->value);
     
-    struct Symbol* symbol = node->VarDecl.symbol;
+    if (node->VarDecl.assignment != NULL) {
+        visit(node->VarDecl.assignment, fp, depth+1);
+    }
 
+    struct Symbol* symbol = node->VarDecl.symbol;
     if (symbol->global) {
+        // TODO this is a nasty hack, space reservations should go at end of file
+        fprintf(fp, "\tjmp $+%d\n", node->type->size+3);
         fprintf(fp, "%s:\n", node->token->value);
         fprintf(fp, "\t#res %d\n", node->type->size);
     }
@@ -154,7 +173,6 @@ static void visit_block(struct Node* node, FILE *fp, int depth) {
     // Allocate stack space
     if (node->scope->stack_size != 0) fprintf(fp, "\tmov sp, sp-%d\n", node->scope->stack_size);
 
-    visit_all(node->Block.variable_declarations, fp, depth+1);
     visit_all(node->Block.statements, fp, depth+1);
 
     // Deallocate
@@ -588,13 +606,6 @@ static struct Register* visit(struct Node* node, FILE *fp, int depth) {
 void generate(struct Node* root_node, char* filename) {
     FILE *fp = fopen(filename, "w");
     if (!fp) error(NULL, "unable to open file '%s'", filename);
-
-    // Program entry code
-    fprintf(fp, "#include \"architecture.asm\"\n\n");
-    fprintf(fp, "#bank RAM\n\n");
-    fprintf(fp, "#addr 0x8100\n\n");
-    fprintf(fp, "call main\n");
-    fprintf(fp, "ret\n\n");
 
     visit(root_node, fp, 0);
 

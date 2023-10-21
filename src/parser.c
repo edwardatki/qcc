@@ -76,6 +76,7 @@ static struct Node* new_node(struct Token* token, enum NodeKind kind) {
     node->token = token;
     node->kind = kind;
     node->scope = get_current_scope();
+    node->constant = 0;
     return node;
 }
 
@@ -138,6 +139,7 @@ static struct Node* factor () {
         return node;
     } else if (peek(TK_NUMBER)) {
         struct Node* node = new_node(current_token, N_NUMBER);
+        eat();
 
         if (node->token->value[0] == '\'') {
             node->token->value[0] = '\"';
@@ -155,7 +157,7 @@ static struct Node* factor () {
             else node->type = &type_char;
         }
 
-        eat();
+        node->constant = 1;
         return node;
     } else if (peek(TK_ID)) {
         if (peek2(TK_LPAREN)) {
@@ -192,6 +194,7 @@ static struct Node* term () {
         node->BinOp.left = factor_node;
         node->BinOp.right = term();
         node->type = get_common_type(token, node->BinOp.left->type, node->BinOp.right->type);
+        node->constant = node->BinOp.left->constant && node->BinOp.right->constant;
     }
     
     return node;
@@ -209,6 +212,7 @@ static struct Node* additive_expr () {
         node->BinOp.left = old_node;
         node->BinOp.right = term();
         node->type = get_common_type(token, node->BinOp.left->type, node->BinOp.right->type);
+        node->constant = node->BinOp.left->constant && node->BinOp.right->constant;
     }
 
     return node;
@@ -226,6 +230,7 @@ static struct Node* relational_expr () {
         node->BinOp.left = old_node;
         node->BinOp.right = additive_expr();
         node->type = get_common_type(token, node->BinOp.left->type, node->BinOp.right->type);
+        node->constant = node->BinOp.left->constant && node->BinOp.right->constant;
     }
 
     return node;
@@ -243,6 +248,7 @@ static struct Node* equality_expr () {
         node->BinOp.left = old_node;
         node->BinOp.right = relational_expr();
         node->type = get_common_type(token, node->BinOp.left->type, node->BinOp.right->type);
+        node->constant = node->BinOp.left->constant && node->BinOp.right->constant;
     }
 
     return node;
@@ -259,7 +265,6 @@ static struct Node* assignment () {
         node = new_node(token, N_ASSIGNMENT);
         node->Assignment.left = expr;
         node->Assignment.right = assignment();
-
         node->type = get_common_type(token, node->Assignment.left->type, node->Assignment.right->type);
     }
 
@@ -357,7 +362,7 @@ static struct Type* type() {
     return type;
 }
 
-// var_decl : type ID SEMICOLON
+// var_decl : type ID (ASSIGN assignment)
 static struct Node* var_decl() {
     struct Type* symbolType = type();
     struct Node* node = new_node(current_token, N_VAR_DECL);
@@ -372,10 +377,26 @@ static struct Node* var_decl() {
     node->type = symbol->type;
     
     eat_kind(TK_ID);
+
+    if (peek(TK_ASSIGN)) {
+        node->VarDecl.assignment = new_node(current_token, N_ASSIGNMENT);
+        node->VarDecl.assignment->type = node->type;
+        eat();
+        node->VarDecl.assignment->Assignment.left = new_node(current_token, N_VARIABLE);
+        node->VarDecl.assignment->Assignment.left->Variable.symbol = symbol;
+        node->VarDecl.assignment->Assignment.left->type = node->type;
+        node->VarDecl.assignment->Assignment.right = assignment();
+
+        if (symbol->global) {
+            if (!node->VarDecl.assignment->Assignment.right->constant) error(node->VarDecl.assignment->token, "initializer element is not constant");
+        }
+    } else {
+        node->VarDecl.assignment = NULL;
+    }
+
     return node;
 }
 
-// Should maybe just treat var_decl as another type of statement
 // block : LBRACE (statement | var_decl SEMICOLON)* RBRACE
 static struct Node* block() {
     enter_new_scope();
@@ -385,10 +406,9 @@ static struct Node* block() {
     eat_kind(TK_LBRACE);
     while (!peek(TK_RBRACE)) {
         if (peek(TK_TYPE)) {
-            add_node_list_entry(&node->Block.variable_declarations, var_decl());
+            add_node_list_entry(&node->Block.statements, var_decl());
             eat_kind(TK_SEMICOLON);
-        }
-        else {
+        } else {
             add_node_list_entry(&node->Block.statements, statement());
         }
     }

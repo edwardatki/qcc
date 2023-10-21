@@ -16,6 +16,8 @@ struct Node {
     struct Type* type;
     struct Scope* scope;
 
+    int constant;
+
     union {
         struct {
             struct NodeListEntry* function_declarations;
@@ -23,6 +25,7 @@ struct Node {
         } Program;
         struct {
             struct Symbol* symbol;
+            struct Node* assignment;
         } VarDecl;
         struct {
             struct Node* block;
