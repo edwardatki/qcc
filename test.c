@@ -1,5 +1,9 @@
 char* terminal = 0x7fff;
 
+char param_test(char a, int b, char* c) {
+    return 0;
+}
+
 char asdf() {
     char i = 7;
     *terminal = '!';

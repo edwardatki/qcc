@@ -4,6 +4,27 @@
 #include "type.h"
 #include "messages.h"
 
+static void add_type_list_entry(struct TypeListEntry** root_entry, struct Type* entryType) {
+    if (*root_entry == NULL) {
+        *root_entry = calloc(1, sizeof(struct TypeListEntry));
+    }
+
+    struct TypeListEntry* current_entry = *root_entry;
+
+    *root_entry = current_entry;
+
+    // Travel to end of list
+    while (current_entry->next != NULL) {
+        current_entry = current_entry->next;
+    }
+
+    // Create new entry
+    struct TypeListEntry* new_entry = calloc(1, sizeof(struct TypeListEntry));
+    new_entry->type = entryType;
+    new_entry->next = NULL;
+    current_entry->next = new_entry;
+}
+
 // TODO we should check if the new type already exists to avoid duplicates
 struct Type* pointer_to(struct Type* base) {
     struct Type *type = calloc(1, sizeof(struct Type));
@@ -19,11 +40,16 @@ struct Type* pointer_to(struct Type* base) {
 struct Type* function_of(struct Type* base) {
     struct Type *type = calloc(1, sizeof(struct Type));
     type->name = calloc(32, sizeof(char));
-    sprintf(type->name, "%s(*)", base->name);
+    sprintf(type->name, "%s()", base->name);
     type->kind = TY_FUNC;
     type->size = 2;
     type->base = base;
     return type;
+}
+
+void add_parameter(struct Type* base, struct Type* new_parameter) {
+    sprintf(base->name, "%s\b%s%s)", base->name, (base->parameters != NULL) ? "," : "", new_parameter->name);
+    add_type_list_entry(&base->parameters, new_parameter);
 }
 
 // Get lowest common denominator type

@@ -5,11 +5,19 @@ struct Token;
 
 enum TypeKind {TY_VOID, TY_POINTER, TY_FUNC, TY_CHAR, TY_INT};
 
+struct NodeListEntry;
+
 struct Type {
     char* name;
     enum TypeKind kind;
     int size;
     struct Type* base;
+    struct TypeListEntry* parameters;
+};
+
+struct TypeListEntry {
+    struct Type* type;
+    struct TypeListEntry* next;
 };
 
 static struct Type type_void = {.name="void", .kind=TY_VOID, .size=0};
@@ -20,6 +28,7 @@ static struct Type* base_types[] = {&type_void, &type_char, &type_int};
 
 struct Type* pointer_to(struct Type*);
 struct Type* function_of(struct Type*);
+void add_parameter(struct Type*, struct Type*);
 struct Type* get_common_type(struct Token*, struct Type*, struct Type*);
 
 #endif

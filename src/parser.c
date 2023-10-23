@@ -439,10 +439,14 @@ static struct Node* function_decl() {
     enter_new_scope();
 
     if (!peek(TK_RPAREN)) {
-        add_node_list_entry(&node->FunctionDecl.formal_parameters, var_decl());
+        struct Node* var_decl_node = var_decl();
+        add_node_list_entry(&node->FunctionDecl.formal_parameters, var_decl_node);
+        add_parameter(node->type, var_decl_node->type);
         while (peek(TK_COMMA)) {
             eat_kind(TK_COMMA);
-            add_node_list_entry(&node->FunctionDecl.formal_parameters, var_decl());
+            struct Node* var_decl_node = var_decl();
+            add_node_list_entry(&node->FunctionDecl.formal_parameters, var_decl_node);
+            add_parameter(node->type, var_decl_node->type);
         }
     }
 
