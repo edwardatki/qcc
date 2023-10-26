@@ -86,12 +86,22 @@ static struct Node* additive_expr();
 static struct Node* function_call() {
     // Lookup symbol from current scope
     struct Node* node = new_node(current_token, N_FUNC_CALL);
-    node->Variable.symbol = lookup_symbol(current_token);
-    node->type = node->Variable.symbol->type->base;
-    eat(TK_ID);
+    node->FuncCall.symbol = lookup_symbol(current_token);
+    node->type = node->FuncCall.symbol->type->base;
+    eat_kind(TK_ID);
 
-    eat(TK_LPAREN);
-    eat(TK_RPAREN);
+    eat_kind(TK_LPAREN);
+
+    if (!peek(TK_RPAREN)) {
+        while (1) {
+            add_node_list_entry(&node->FuncCall.parameters, expr());
+            
+            if (!peek(TK_COMMA)) break;
+            eat();
+        }
+    }
+
+    eat_kind(TK_RPAREN);
 
     return node;
 }
@@ -115,7 +125,7 @@ static struct Node* factor () {
         struct Node* left_node = new_node(current_token, N_VARIABLE);
         left_node->Variable.symbol = lookup_symbol(current_token);
         left_node->type = left_node->Variable.symbol->type;
-        eat(TK_ID);
+        eat_kind(TK_ID);
 
         node->UnaryOp.left = left_node;
 
@@ -168,14 +178,14 @@ static struct Node* factor () {
             struct Node* node = new_node(current_token, N_VARIABLE);
             node->Variable.symbol = lookup_symbol(current_token);
             node->type = node->Variable.symbol->type;
-            eat(TK_ID);
+            eat();
 
             return node;
         }
     } else if (peek(TK_LPAREN)) {
         eat();
         struct Node* node = expr();
-        eat(TK_RPAREN);
+        eat_kind(TK_RPAREN);
         return node;
     }
 
@@ -439,14 +449,13 @@ static struct Node* function_decl() {
     enter_new_scope();
 
     if (!peek(TK_RPAREN)) {
-        struct Node* var_decl_node = var_decl();
-        add_node_list_entry(&node->FunctionDecl.formal_parameters, var_decl_node);
-        add_parameter(node->type, var_decl_node->type);
-        while (peek(TK_COMMA)) {
-            eat_kind(TK_COMMA);
+        while (1) {
             struct Node* var_decl_node = var_decl();
             add_node_list_entry(&node->FunctionDecl.formal_parameters, var_decl_node);
             add_parameter(node->type, var_decl_node->type);
+            
+            if (!peek(TK_COMMA)) break;
+            eat();
         }
     }
 
@@ -470,7 +479,7 @@ static struct Node* program () {
             add_node_list_entry(&node->Program.function_declarations, function_decl());
         } else {
             add_node_list_entry(&node->Program.global_variables, var_decl());
-            eat(TK_SEMICOLON);
+            eat_kind(TK_SEMICOLON);
         }
     }
     return node;

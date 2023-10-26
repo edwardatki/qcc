@@ -112,7 +112,7 @@ static struct Register* get_address(struct Node* node, FILE *fp, int depth) {
 static void visit_program(struct Node* node, FILE *fp, int depth) {
     printf("%s\t", node->type->name);
     print_indent(depth);
-    printf("Program\n");
+    printf("Program:\n");
 
     // Program setup
     fprintf(fp, "#include \"architecture.asm\"\n\n");
@@ -168,7 +168,7 @@ static void visit_func_decl(struct Node* node, FILE *fp, int depth) {
 static void visit_block(struct Node* node, FILE *fp, int depth) {
     printf("%s\t", node->type->name);
     print_indent(depth);
-    printf("Block\n");
+    printf("Block:\n");
 
     // Allocate stack space
     if (node->scope->stack_size != 0) fprintf(fp, "\tmov sp, sp-%d\n", node->scope->stack_size);
@@ -426,7 +426,7 @@ static struct Register* visit_unary_op(struct Node* node, FILE *fp, int depth) {
 static void visit_return(struct Node* node, FILE *fp, int depth) {
     printf("%s\t", node->type->name);
     print_indent(depth);
-    printf("Return\n");
+    printf("Return:\n");
 
     // Get return value
     struct Register* reg = visit(node->Return.expr, fp, depth+1);
@@ -445,7 +445,7 @@ static void visit_return(struct Node* node, FILE *fp, int depth) {
 static void visit_if(struct Node* node, FILE *fp, int depth) {
     printf("%s\t", node->type->name);
     print_indent(depth);
-    printf("If\n");
+    printf("If:\n");
 
     static int label_count = 0;
 
@@ -491,7 +491,7 @@ static void visit_if(struct Node* node, FILE *fp, int depth) {
 static void visit_while(struct Node* node, FILE *fp, int depth) {
     printf("%s\t", node->type->name);
     print_indent(depth);
-    printf("While\n");
+    printf("While:\n");
 
     static int label_count = 0;
 
@@ -546,7 +546,23 @@ static struct Register* visit_func_call(struct Node* node, FILE *fp, int depth) 
         local_stack_usage += 1;
     }
 
+    // Push parameters
+    // visit_all(node->FuncCall.parameters, fp, depth+1);
+
+    int func_stack_usage = 0;
+    if (node->FuncCall.parameters != NULL) {
+        struct NodeListEntry* current_entry = node->FuncCall.parameters;
+        while (current_entry->next != NULL) {
+            current_entry = current_entry->next;
+            struct Register* reg = visit(current_entry->node, fp, depth+1);
+            fprintf(fp, "\tpush %s\n", reg->name);
+            func_stack_usage += reg->size;
+            free_reg(reg);
+        }
+    }
+    
     fprintf(fp, "\tcall %s\n", node->token->value);
+    fprintf(fp, "\tmov sp, sp+%d\n", func_stack_usage);
 
     // Move result out of accumulator if necessary
     struct Register* result_reg = allocate_reg(1);

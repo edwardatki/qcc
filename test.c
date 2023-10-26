@@ -1,28 +1,32 @@
-char* terminal = 0x7fff;
-
-char param_test(char a, int b, char* c) {
-    return 0;
+void putc(char c) {
+    char* terminal = 0x7fff;
+    *terminal = c;
 }
 
-char asdf() {
-    char i = 7;
-    *terminal = '!';
-    return i;
+char getc() {
+    char* terminal = 0x7fff;
+    return *terminal;
+}
+
+char asdf(char a) {
+    char b = 7;
+    putc('!');
+    return a+b;
 }
 
 char main() {
     char test = 0;
     while (test < 10) {
-        char c = *terminal;
+        char c = getc();
         if (c != 0) {
             test = test + 1;
-            *terminal = c;
+            putc(c);
         }
     }
 
-    char x = asdf();
+    char x = asdf(2);
 
-    *terminal = '\n';
+    putc('\n');
 
     return x;
 }
