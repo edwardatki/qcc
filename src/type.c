@@ -33,6 +33,7 @@ struct Type* pointer_to(struct Type* base) {
     type->kind = TY_POINTER;
     type->size = 2;
     type->base = base;
+    type->parameters = NULL;
     return type;
 }
 
@@ -44,6 +45,7 @@ struct Type* function_of(struct Type* base) {
     type->kind = TY_FUNC;
     type->size = 2;
     type->base = base;
+    type->parameters = NULL;
     return type;
 }
 

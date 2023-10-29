@@ -93,12 +93,22 @@ static struct Node* function_call() {
     eat_kind(TK_LPAREN);
 
     if (!peek(TK_RPAREN)) {
+        struct TypeListEntry* formal_param = node->FuncCall.symbol->type->parameters;
         while (1) {
-            add_node_list_entry(&node->FuncCall.parameters, expr());
+            if (formal_param->next == NULL) error(node->token, "too many parameters provided");
+            formal_param = formal_param->next;
+
+            struct Node* expr_node = expr();
+            
+            expr_node->type = get_common_type(expr_node->token, formal_param->type, expr_node->type);
+
+            add_node_list_entry(&node->FuncCall.parameters, expr_node);
             
             if (!peek(TK_COMMA)) break;
             eat();
         }
+    } else {
+        if (node->FuncCall.symbol->type->parameters != NULL) error(node->token, "no parameters provided");
     }
 
     eat_kind(TK_RPAREN);

@@ -156,8 +156,6 @@ static void visit_func_decl(struct Node* node, FILE *fp, int depth) {
     print_indent(depth);
     printf("Function declaration: %s %s\n", node->type->name, node->token->value);
 
-    fprintf(fp, "%s:\n", node->token->value);
-
     visit_all(node->FunctionDecl.formal_parameters, fp, depth+1);
     visit(node->FunctionDecl.block, fp, depth+1);
 
@@ -209,8 +207,13 @@ static struct Register* cast(struct Register* reg, struct Type* from_type, struc
     free_reg(reg);
     reg = allocate_reg(to_type->size);
 
+    if (from_type->kind == to_type->kind) return reg;
+
     if ((from_type->kind == TY_INT) && (to_type->kind == TY_CHAR)) fprintf(fp, "\tmov %s, %s ; (%s)\n", reg->name, original_reg->high_reg->name, to_type->name);
-    if ((from_type->kind == TY_CHAR) && (to_type->kind == TY_INT)) fprintf(fp, "\tmov %s, 0 ; (%s)\n\tmov %s, %s\n", reg->high_reg->name, to_type->name, reg->low_reg->name, original_reg->name);
+    else if ((from_type->kind == TY_CHAR) && (to_type->kind == TY_INT)) fprintf(fp, "\tmov %s, 0 ; (%s)\n\tmov %s, %s\n", reg->high_reg->name, to_type->name, reg->low_reg->name, original_reg->name);
+    else if ((from_type->kind == TY_POINTER) && (to_type->kind == TY_INT)) ;
+    else if ((from_type->kind == TY_INT) && (to_type->kind == TY_POINTER)) ;
+    else error(NULL, "cast from '%s' to '%s' not implemented", from_type->name, to_type->name);
 
     return reg;
 }
@@ -539,6 +542,8 @@ static struct Register* visit_func_call(struct Node* node, FILE *fp, int depth) 
     print_indent(depth);
     printf("Call: %s\n", node->token->value);
 
+    struct Symbol* symbol = node->FuncCall.symbol;
+
     // Push accumulator if necessary
     int preserve_a = !registers[0].free;
     if (preserve_a) {
@@ -547,14 +552,15 @@ static struct Register* visit_func_call(struct Node* node, FILE *fp, int depth) 
     }
 
     // Push parameters
-    // visit_all(node->FuncCall.parameters, fp, depth+1);
-
     int func_stack_usage = 0;
+    struct NodeListEntry* actual_param = node->FuncCall.parameters;
     if (node->FuncCall.parameters != NULL) {
-        struct NodeListEntry* current_entry = node->FuncCall.parameters;
-        while (current_entry->next != NULL) {
-            current_entry = current_entry->next;
-            struct Register* reg = visit(current_entry->node, fp, depth+1);
+        while (1) {
+            if (actual_param->next == NULL) break;
+            actual_param = actual_param->next;
+            
+            struct Register* reg = visit(actual_param->node, fp, depth+1);
+            // reg = cast(reg, actual_param->node->type, formal_param->type, fp);
             fprintf(fp, "\tpush %s\n", reg->name);
             func_stack_usage += reg->size;
             free_reg(reg);
