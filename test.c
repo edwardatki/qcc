@@ -8,10 +8,16 @@ char getc() {
     return *terminal;
 }
 
-char asdf(char a) {
-    char b = 7;
-    putc('!');
-    return a+b;
+void print_hex_u8(char value) {
+    char high = (value >> 4) & 0x0f;
+    if (high > 0x9) high = high - 0xA + 'A';
+    else high = high + '0';
+    putc(high);
+
+    char low = value & 0x0f;
+    if (low > 0x9) low = low - 0xA + 'A';
+    else low = low + '0';
+    putc(low);
 }
 
 char main() {
@@ -20,13 +26,12 @@ char main() {
         char c = getc();
         if (c != 0) {
             test = test + 1;
-            putc(c);
+            print_hex_u8(c);
+            putc(' ');
         }
     }
 
-    char x = asdf(2);
-
     putc('\n');
 
-    return x;
+    return 0;
 }

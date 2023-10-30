@@ -34,7 +34,7 @@ static void eat() {
 
 
 static void eat_kind(enum TokenKind kind) {
-    char* messages[] = {"EOF", "'('", "')'", "'{'", "'}'", "','" "','", "'+'", "'-'", "'*'", "'/'", "'='", "a literal", "keyword 'return'", "an identifier", "a type", "';'", "keyword 'if'", "keyword 'else'", "'>'", "'<'", "'>='", "'<='", "'=='", "'!='", "keyword 'while'", "'&'"};
+    char* messages[] = {"EOF", "'('", "')'", "'{'", "'}'", "','" "','", "'+'", "'-'", "'*'", "'/'", "'='", "a literal", "keyword 'return'", "an identifier", "a type", "';'", "keyword 'if'", "keyword 'else'", "'>'", "'<'", "'>='", "'<='", "'=='", "'!='", "keyword 'while'", "'&'", "'|'", "'<<'", "'>>'"};
     if (current_token->kind != kind) {
         error(current_token, "expected %s but got %s", messages[kind], messages[current_token->kind]);
     }
@@ -238,9 +238,27 @@ static struct Node* additive_expr () {
     return node;
 }
 
-// relational_expr : additive_expr ((MORE | LESS | MORE_EQUAL | LESS_EQUAL) additive_expr)*
-static struct Node* relational_expr () {
+// shift_expr : additive_expr ((LSHIFT | RSHIFT) additive_expr)*
+static struct Node* shift_expr () {
     struct Node* node = additive_expr();
+
+    while (peek(TK_LSHIFT) || peek(TK_RSHIFT)) {
+        struct Token* token = current_token;
+        eat();
+        struct Node* old_node = node;
+        node = new_node(token, N_BINOP);
+        node->BinOp.left = old_node;
+        node->BinOp.right = additive_expr();
+        node->type = get_common_type(token, node->BinOp.left->type, node->BinOp.right->type);
+        node->constant = node->BinOp.left->constant && node->BinOp.right->constant;
+    }
+
+    return node;
+}
+
+// relational_expr : shift_expr ((MORE | LESS | MORE_EQUAL | LESS_EQUAL) shift_expr)*
+static struct Node* relational_expr () {
+    struct Node* node = shift_expr();
 
     while (peek(TK_MORE) || peek(TK_LESS) || peek(TK_MORE_EQUAL) || peek(TK_LESS_EQUAL)) {
         struct Token* token = current_token;
@@ -248,7 +266,7 @@ static struct Node* relational_expr () {
         struct Node* old_node = node;
         node = new_node(token, N_BINOP);
         node->BinOp.left = old_node;
-        node->BinOp.right = additive_expr();
+        node->BinOp.right = shift_expr();
         node->type = get_common_type(token, node->BinOp.left->type, node->BinOp.right->type);
         node->constant = node->BinOp.left->constant && node->BinOp.right->constant;
     }
@@ -274,9 +292,27 @@ static struct Node* equality_expr () {
     return node;
 }
 
-// assignment : equality_expr (ASSIGN assignment)
-static struct Node* assignment () {
+// logical_expr : equality_expr ((AND | OR) equality_expr)*
+static struct Node* logical_expr () {
     struct Node* node = equality_expr();
+
+    while (peek(TK_AMPERSAND) || peek(TK_BAR)) {
+        Token* token = current_token;
+        eat();
+        struct Node* old_node = node;
+        node = new_node(token, N_BINOP);
+        node->BinOp.left = old_node;
+        node->BinOp.right = equality_expr();
+        node->type = get_common_type(token, node->BinOp.left->type, node->BinOp.right->type);
+        node->constant = node->BinOp.left->constant && node->BinOp.right->constant;
+    }
+
+    return node;
+}
+
+// assignment : logical_expr (ASSIGN assignment)
+static struct Node* assignment () {
+    struct Node* node = logical_expr();
     
     if (peek(TK_ASSIGN)) {
         struct Token* token = current_token;

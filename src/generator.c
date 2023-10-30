@@ -156,6 +156,8 @@ static void visit_func_decl(struct Node* node, FILE *fp, int depth) {
     print_indent(depth);
     printf("Function declaration: %s %s\n", node->type->name, node->token->value);
 
+    fprintf(fp, "%s:\n", node->token->value);
+
     visit_all(node->FunctionDecl.formal_parameters, fp, depth+1);
     visit(node->FunctionDecl.block, fp, depth+1);
 
@@ -262,6 +264,44 @@ static struct Register* visit_bin_op(struct Node* node, FILE *fp, int depth) {
         fprintf(fp, "\tadd %s\n", right_reg->name);
     } else if (strcmp(node->token->value, "-") == 0) {
         fprintf(fp, "\tsub %s\n", right_reg->name);
+    } else if (strcmp(node->token->value, "&") == 0) {
+        fprintf(fp, "\tand %s\n", right_reg->name);
+    } else if (strcmp(node->token->value, "|") == 0) {
+        fprintf(fp, "\tor %s\n", right_reg->name);
+    } else if (strcmp(node->token->value, "<<") == 0) { // TODO this is a rotate instead of shift :(
+        static int label_count = 0;
+
+        fprintf(fp, "\tpush a\n");
+        fprintf(fp, "\tmov a, %s\n", right_reg->name);
+        fprintf(fp, "\tand 0b111\n");
+        fprintf(fp, "\tmov %s, a\n", right_reg->name);
+        fprintf(fp, "\tpop a\n");
+
+        fprintf(fp, ".shl_loop_%d:\n", label_count);
+        fprintf(fp, "\tdec %s\n", right_reg->name);
+        fprintf(fp, "\tjnc .shl_exit_%d\n", label_count);
+        fprintf(fp, "\trol\n");
+        fprintf(fp, "\tjmp .shl_loop_%d\n", label_count);
+        fprintf(fp, ".shl_exit_%d:\n", label_count);
+
+        label_count++;
+    } else if (strcmp(node->token->value, ">>") == 0) { // TODO this is a rotate instead of shift :(
+        static int label_count = 0;
+        fprintf(fp, "\tpush a\n");
+        fprintf(fp, "\tmov a, 8\n");
+        fprintf(fp, "\tsub %s\n", right_reg->name);
+        fprintf(fp, "\tand 0b111\n");
+        fprintf(fp, "\tmov %s, a\n", right_reg->name);
+        fprintf(fp, "\tpop a\n");
+        
+        fprintf(fp, ".shr_loop_%d:\n", label_count);
+        fprintf(fp, "\tdec %s\n", right_reg->name);
+        fprintf(fp, "\tjnc .shr_exit_%d\n", label_count);
+        fprintf(fp, "\trol\n");
+        fprintf(fp, "\tjmp .shr_loop_%d\n", label_count);
+        fprintf(fp, ".shr_exit_%d:\n", label_count);
+        
+        label_count++;
     } else if (strcmp(node->token->value, ">") == 0) {
         static int label_count = 0;
         

@@ -167,6 +167,8 @@ struct Token* lex(char* _filename) {
         if ((c == '<') && (peek(fp) == '=')) {add_token(TK_LESS_EQUAL, "<=", current_line, current_column); next(fp); continue;}
         if ((c == '=') && (peek(fp) == '=')) {add_token(TK_EQUAL, "==", current_line, current_column); next(fp); continue;}
         if ((c == '!') && (peek(fp) == '=')) {add_token(TK_NOT_EQUAL, "!=", current_line, current_column); next(fp); continue;}
+        if ((c == '<') && (peek(fp) == '<')) {add_token(TK_LSHIFT, "<<", current_line, current_column); next(fp); continue;}
+        if ((c == '>') && (peek(fp) == '>')) {add_token(TK_RSHIFT, ">>", current_line, current_column); next(fp); continue;}
 
         // Check single character tokens
         if (c == '(') {add_token(TK_LPAREN, "{", current_line, current_column); continue;}
@@ -183,6 +185,7 @@ struct Token* lex(char* _filename) {
         if (c == '>') {add_token(TK_MORE, ">", current_line, current_column); continue;}
         if (c == '<') {add_token(TK_LESS, "<", current_line, current_column); continue;}
         if (c == '&') {add_token(TK_AMPERSAND, "&", current_line, current_column); continue;}
+        if (c == '|') {add_token(TK_BAR, "|", current_line, current_column); continue;}
 
         // Check multi character tokens
         if (isdigit(c)) {check_numeric(fp, c); continue;}
