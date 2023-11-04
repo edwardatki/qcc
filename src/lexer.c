@@ -81,6 +81,22 @@ static void check_char_literal(FILE* fp, char c) {
 
     add_token(TK_NUMBER, value, current_line, start_column);
 }
+
+static void check_string_literal(FILE* fp, char c) {
+    int start_column = current_column;
+
+    char* value = calloc(32, sizeof(char));
+    int i = 0;
+    value[i++] = c;
+    while(1) {
+        c = next(fp);
+        value[i++] = c;
+        if (c == '\"') break;
+    }
+
+    add_token(TK_STRING, value, current_line, start_column);
+}
+
 static void check_numeric(FILE* fp, char c) {
     int start_column = current_column;
 
@@ -169,6 +185,8 @@ struct Token* lex(char* _filename) {
         if ((c == '!') && (peek(fp) == '=')) {add_token(TK_NOT_EQUAL, "!=", current_line, current_column); next(fp); continue;}
         if ((c == '<') && (peek(fp) == '<')) {add_token(TK_LSHIFT, "<<", current_line, current_column); next(fp); continue;}
         if ((c == '>') && (peek(fp) == '>')) {add_token(TK_RSHIFT, ">>", current_line, current_column); next(fp); continue;}
+        if ((c == '+') && (peek(fp) == '+')) {add_token(TK_INC, "++", current_line, current_column); next(fp); continue;}
+        if ((c == '-') && (peek(fp) == '-')) {add_token(TK_DEC, "--", current_line, current_column); next(fp); continue;}
 
         // Check single character tokens
         if (c == '(') {add_token(TK_LPAREN, "{", current_line, current_column); continue;}
@@ -191,6 +209,7 @@ struct Token* lex(char* _filename) {
         if (isdigit(c)) {check_numeric(fp, c); continue;}
         if (isalpha(c)) {check_keyword(fp, c); continue;}
         if (c == '\'') {check_char_literal(fp, c); continue;}
+        if (c == '\"') {check_string_literal(fp, c); continue;}
 
         printf("%s:%d:%d: ", filename, current_line, current_column); 
         error(NULL, "unrecognized token");

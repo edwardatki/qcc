@@ -34,7 +34,7 @@ static void eat() {
 
 
 static void eat_kind(enum TokenKind kind) {
-    char* messages[] = {"EOF", "'('", "')'", "'{'", "'}'", "','" "','", "'+'", "'-'", "'*'", "'/'", "'='", "a literal", "keyword 'return'", "an identifier", "a type", "';'", "keyword 'if'", "keyword 'else'", "'>'", "'<'", "'>='", "'<='", "'=='", "'!='", "keyword 'while'", "'&'", "'|'", "'<<'", "'>>'"};
+    char* messages[] = {"EOF", "'('", "')'", "'{'", "'}'", "','" "','", "'+'", "'-'", "'*'", "'/'", "'='", "a literal", "keyword 'return'", "an identifier", "a type", "';'", "keyword 'if'", "keyword 'else'", "'>'", "'<'", "'>='", "'<='", "'=='", "'!='", "keyword 'while'", "'&'", "'|'", "'<<'", "'>>'", "a string literal", "'++'", "'--'"};
     if (current_token->kind != kind) {
         error(current_token, "expected %s but got %s", messages[kind], messages[current_token->kind]);
     }
@@ -116,7 +116,7 @@ static struct Node* function_call() {
     return node;
 }
 
-// factor : ((PLUS | MINUS) factor) | (AMPERSAND) variable | ASTERISK additive_expr| NUMBER | ID | ID LPAREN (expr COMMA)* RPAREN | assignment | LPAREN expr RPAREN
+// factor : ((PLUS | MINUS) factor) | (AMPERSAND) variable (INC | DEC) | ASTERISK additive_expr| NUMBER | STRING | ID | ID LPAREN (expr COMMA)* RPAREN | assignment | LPAREN expr RPAREN
 static struct Node* factor () {
     if (peek(TK_PLUS) || peek(TK_MINUS)) {
         struct Node* node = new_node(current_token, N_UNARY);
@@ -162,6 +162,7 @@ static struct Node* factor () {
         eat();
 
         if (node->token->value[0] == '\'') {
+            // TODO check only a single character, escape sequences and all
             node->token->value[0] = '\"';
             int i = 1;
             while (node->token->value[i] != '\'') i++;
@@ -179,6 +180,14 @@ static struct Node* factor () {
 
         node->constant = 1;
         return node;
+    } else if (peek(TK_STRING)) {
+        struct Node* node = new_node(current_token, N_STRING);
+        eat();
+
+        node->type = pointer_to(&type_char);
+
+        node->constant = 1;
+        return node;
     } else if (peek(TK_ID)) {
         if (peek2(TK_LPAREN)) {
             return function_call();
@@ -189,6 +198,22 @@ static struct Node* factor () {
             node->Variable.symbol = lookup_symbol(current_token);
             node->type = node->Variable.symbol->type;
             eat();
+
+            // TODO this is actually pre not post as it should be
+            if (peek(TK_INC) || peek(TK_DEC)) {
+                struct Node* assignment_node = new_node(current_token, N_ASSIGNMENT);
+                struct Node* unary_node = new_node(current_token, N_UNARY);
+                eat();
+
+                unary_node->UnaryOp.left = node;
+                unary_node->type = node->type;
+
+                assignment_node->Assignment.left = node;
+                assignment_node->Assignment.right = unary_node;
+                assignment_node->type = node->type;
+
+                node = assignment_node;
+            }
 
             return node;
         }

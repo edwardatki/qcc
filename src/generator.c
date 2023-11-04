@@ -138,13 +138,13 @@ static void visit_var_decl(struct Node* node, FILE *fp, int depth) {
     printf("Variable declaration: %s\n", node->VarDecl.symbol->token->value);
     
     if (node->VarDecl.assignment != NULL) {
-        visit(node->VarDecl.assignment, fp, depth+1);
+        free_reg(visit(node->VarDecl.assignment, fp, depth+1));
     }
 
     struct Symbol* symbol = node->VarDecl.symbol;
     if (symbol->global) {
         // TODO this is a nasty hack, space reservations should go at end of file
-        fprintf(fp, "\tjmp $+%d\n", node->type->size+3);
+        fprintf(fp, "\tjmp $+%d+3\n", node->type->size);
         fprintf(fp, "%s:\n", node->token->value);
         fprintf(fp, "\t#res %d\n", node->type->size);
     }
@@ -159,7 +159,7 @@ static void visit_func_decl(struct Node* node, FILE *fp, int depth) {
     fprintf(fp, "%s:\n", node->token->value);
 
     visit_all(node->FunctionDecl.formal_parameters, fp, depth+1);
-    visit(node->FunctionDecl.block, fp, depth+1);
+    free_reg(visit(node->FunctionDecl.block, fp, depth+1));
 
     fprintf(fp, ".%s_exit:\n", node->token->value);
     fprintf(fp, "\tret\n\n");
@@ -186,6 +186,27 @@ static struct Register* visit_number(struct Node* node, FILE *fp, int depth) {
 
     struct Register* reg = allocate_reg(node->type->size);
     fprintf(fp, "\tmov %s, %s\n", reg->name, node->token->value);
+    return reg;
+}
+
+static struct Register* visit_string(struct Node* node, FILE *fp, int depth) {
+    printf("%s\t", node->type->name);
+    print_indent(depth);
+    printf("String: %s\n", node->token->value);
+
+    static int label_count = 0;
+
+    // TODO this is a nasty hack, constant data should go at end of file
+    fprintf(fp, "\tjmp $+%d+3\n", (int)strlen(node->token->value)-1);
+    fprintf(fp, "string_%d:\n", label_count);
+    fprintf(fp, "\t#d %s\n", node->token->value);
+    fprintf(fp, "\t#d8 0\n");
+
+    struct Register* reg = allocate_reg(node->type->size);
+    fprintf(fp, "\tmov %s, string_%d\n", reg->name, label_count);
+
+    label_count += 1;
+
     return reg;
 }
 
@@ -220,7 +241,7 @@ static struct Register* cast(struct Register* reg, struct Type* from_type, struc
     return reg;
 }
 
-static void visit_assignment(struct Node* node, FILE *fp, int depth) {
+static struct Register* visit_assignment(struct Node* node, FILE *fp, int depth) {
     printf("%s\t", node->type->name);
     print_indent(depth);
     // printf("Assignment: %s\n", node->Assignment.left->token->value);
@@ -234,7 +255,8 @@ static void visit_assignment(struct Node* node, FILE *fp, int depth) {
     fprintf(fp, "\tmov [%s], %s\n", pointer_reg->name, value_reg->name);  
     
     free_reg(pointer_reg);
-    free_reg(value_reg);
+
+    return value_reg;
 }
 
 static struct Register* visit_bin_op(struct Node* node, FILE *fp, int depth) {
@@ -417,6 +439,7 @@ static struct Register* visit_unary_op(struct Node* node, FILE *fp, int depth) {
 
         // Don't need to do anything here
         struct Register* left_reg = visit(node->UnaryOp.left, fp, depth+1);
+
         return left_reg;
     } else if (strcmp(node->token->value, "-") == 0) {
         printf("%s\t", node->type->name);
@@ -461,6 +484,24 @@ static struct Register* visit_unary_op(struct Node* node, FILE *fp, int depth) {
         struct Register* pointer_reg = get_address(node->UnaryOp.left, fp, depth+1);
 
         return pointer_reg;
+    } else if (strcmp(node->token->value, "++") == 0) {
+        printf("%s\t", node->type->name);
+        print_indent(depth);
+        printf("UnaryOp: %s\n", node->token->value);
+
+        struct Register* left_reg = visit(node->UnaryOp.left, fp, depth+1);
+        fprintf(fp, "\tinc %s\n", left_reg->name);
+
+        return left_reg;
+    } else if (strcmp(node->token->value, "--") == 0) {
+        printf("%s\t", node->type->name);
+        print_indent(depth);
+        printf("UnaryOp: %s\n", node->token->value);
+
+        struct Register* left_reg = visit(node->UnaryOp.left, fp, depth+1);
+        fprintf(fp, "\tdec %s\n", left_reg->name);
+
+        return left_reg;
     } else {
         error(node->token, "invalid unary operator");
     }
@@ -519,12 +560,12 @@ static void visit_if(struct Node* node, FILE *fp, int depth) {
 
     // Visit true branch
     fprintf(fp, ".if_true_%d:\n", label_count);
-    visit(node->If.true_statement, fp, depth+1);
+    free_reg(visit(node->If.true_statement, fp, depth+1));
     fprintf(fp, "\tjmp .if_exit_%d\n", label_count);
 
     // Visit false branch
     fprintf(fp, ".if_false_%d:\n", label_count);
-    if (node->If.false_statement != NULL) visit(node->If.false_statement, fp, depth+1);
+    if (node->If.false_statement != NULL) free_reg(visit(node->If.false_statement, fp, depth+1));
 
     fprintf(fp, ".if_exit_%d:\n", label_count);
 
@@ -567,7 +608,7 @@ static void visit_while(struct Node* node, FILE *fp, int depth) {
 
     // Visit loop statement
     fprintf(fp, ".while_contents_%d:\n", label_count);
-    visit(node->While.loop_statement, fp, depth+1);
+    free_reg(visit(node->While.loop_statement, fp, depth+1));
 
     // Go back to start of loop
     fprintf(fp, "\tjmp .while_start_%d\n", label_count);
@@ -639,11 +680,12 @@ static struct Register* visit(struct Node* node, FILE *fp, int depth) {
             return NULL;
         case N_NUMBER:
             return visit_number(node, fp, depth);
+        case N_STRING:
+            return visit_string(node, fp, depth);
         case N_VARIABLE:
             return visit_variable(node, fp, depth);
         case N_ASSIGNMENT:
-            visit_assignment(node, fp, depth);
-            return NULL;
+            return visit_assignment(node, fp, depth);
         case N_BINOP:
             return visit_bin_op(node, fp, depth);
         case N_UNARY:

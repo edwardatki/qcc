@@ -1,11 +1,22 @@
+char* str = "asdf";
+
+char getc() {
+    char* terminal = 0x7000;
+    return *terminal;
+}
+
 void putc(char c) {
-    char* terminal = 0x7fff;
+    char* terminal = 0x7000;
     *terminal = c;
 }
 
-char getc() {
-    char* terminal = 0x7fff;
-    return *terminal;
+void print(char* str) {
+    char c = *str;
+    while (c != '\0') {
+        putc(*str);
+        str++;
+        c = *str;
+    }
 }
 
 void print_hex_u8(char value) {
@@ -21,16 +32,9 @@ void print_hex_u8(char value) {
 }
 
 char main() {
-    char test = 0;
-    while (test < 10) {
-        char c = getc();
-        if (c != 0) {
-            test = test + 1;
-            print_hex_u8(c);
-            putc(' ');
-        }
-    }
-
+    print(str);
+    putc('\n');
+    print("Hello world!");
     putc('\n');
 
     return 0;
