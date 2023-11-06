@@ -9,6 +9,7 @@
 #include "scope.h"
 #include "symbol.h"
 #include "type.h"
+#include "list.h"
 
 int local_stack_usage = 0;
 
@@ -66,14 +67,13 @@ static void free_reg(struct Register* reg) {
 
 static struct Register* visit(struct Node*, FILE *fp, int);
 
-static void visit_all(struct NodeListEntry* listRoot, FILE *fp, int depth) {
+static void visit_all(struct List* listRoot, FILE *fp, int depth) {
     if (listRoot == NULL) return;
-    struct NodeListEntry* current_entry = listRoot;
-    while (current_entry->next != NULL) {
-        current_entry = current_entry->next;
-        struct Register* reg = visit(current_entry->node, fp, depth);
+    struct List* current_entry = listRoot;
+    do {
+        struct Register* reg = visit((struct Node*)current_entry->value, fp, depth);
         free_reg(reg);   // Free registers that were allocated but never used for anything :(
-    }
+    } while (list_next(&current_entry));
 }
 
 static void print_indent(int depth) {
@@ -634,18 +634,17 @@ static struct Register* visit_func_call(struct Node* node, FILE *fp, int depth) 
 
     // Push parameters
     int func_stack_usage = 0;
-    struct NodeListEntry* actual_param = node->FuncCall.parameters;
     if (node->FuncCall.parameters != NULL) {
-        while (1) {
-            if (actual_param->next == NULL) break;
-            actual_param = actual_param->next;
+        struct List* current_entry = node->FuncCall.parameters;
+        do {
+            struct Node* actual_param = (struct Node*)current_entry->value;
             
-            struct Register* reg = visit(actual_param->node, fp, depth+1);
+            struct Register* reg = visit(actual_param, fp, depth+1);
             // reg = cast(reg, actual_param->node->type, formal_param->type, fp);
             fprintf(fp, "\tpush %s\n", reg->name);
             func_stack_usage += reg->size;
             free_reg(reg);
-        }
+        } while (list_next(&current_entry));
     }
     
     fprintf(fp, "\tcall %s\n", node->token->value);

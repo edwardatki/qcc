@@ -6,27 +6,10 @@
 #include "scope.h"
 #include "symbol.h"
 #include "type.h"
+#include "list.h"
 
 static struct Scope* current_scope = NULL;
 static int scope_count = 0;
-
-static void add_symbol_list_entry(struct SymbolListEntry** root_entry, struct Symbol* entry_symbol) {
-    if (*root_entry == NULL) {
-        *root_entry = calloc(1, sizeof(struct SymbolListEntry));
-    }
-
-    struct SymbolListEntry* current_entry = *root_entry;
-
-    // Travel to end of list
-    while (current_entry->next != NULL) {
-        current_entry = current_entry->next;
-    }
-
-    // // Create new entry
-    struct SymbolListEntry* new_entry = calloc(1, sizeof(struct SymbolListEntry));
-    new_entry->symbol = entry_symbol;
-    current_entry->next = new_entry;
-}
 
 void enter_new_scope() {
     // printf("ENTER SCOPE\n");
@@ -56,7 +39,7 @@ struct Scope* get_current_scope() {
 }
 
 void scope_add_symbol(struct Symbol* symbol) {
-    add_symbol_list_entry(&current_scope->symbol_list, symbol);
+    list_add(&current_scope->symbol_list, symbol);
 
     // Check if in global scope
     if (current_scope->id == 0) {
@@ -74,17 +57,23 @@ void scope_add_symbol(struct Symbol* symbol) {
 struct Symbol* lookup_symbol(struct Token* token) {
     struct Scope* search_scope = current_scope;
     while (search_scope != NULL) {
-        // printf("SEARCHING SCOPE: %d\n", search_scope->id);
-        struct SymbolListEntry* current_entry = search_scope->symbol_list;
-        while (current_entry != NULL) {
-            if (current_entry->symbol != NULL) { // First item is always empty, should change how my lists work
+        // printf("SEARCHING SCOPE: %d for %s\n", search_scope->id, token->value);
+        // If scope has contains symbols then search it
+        if (search_scope->symbol_list != NULL) {
+            struct List* current_entry = search_scope->symbol_list;
+            do {
+                struct Symbol* symbol = (struct Symbol*)current_entry->value;
+
                 // Check if matches the symbol we're looking for
                 // TODO: Type checking
-                if (strcmp(current_entry->symbol->token->value, token->value) == 0) return current_entry->symbol;
-            }
-            current_entry = current_entry->next;
+                // printf(" test: %s\n", symbol->token->value);
+                if (strcmp(symbol->token->value, token->value) == 0) {
+                    return symbol;
+                }
+            } while (list_next(&current_entry));
         }
 
+        // Not found so move up to parent scope
         search_scope = search_scope->parent_scope;
     }
 
@@ -99,17 +88,20 @@ int get_symbol_stack_offset(struct Symbol* symbol, struct Scope* scope) {
     int stack_offset = 0;
     while (search_scope != NULL) {
         // printf("SEARCHING SCOPE: %d size %d\n", search_scope->id, search_scope->stack_size);
-        struct SymbolListEntry* current_entry = search_scope->symbol_list;
-        while (current_entry != NULL) {
-            if (current_entry->symbol != NULL) { // First item is always empty, should change how my lists work
+        // If scope has contains symbols then search it
+        if (search_scope->symbol_list != NULL) {
+            struct List* current_entry = search_scope->symbol_list;
+            do {
+                struct Symbol* symbol = (struct Symbol*)current_entry->value;
+
                 // Check if matches the symbol we're looking for
-                if (strcmp(current_entry->symbol->token->value, symbol->token->value) == 0) {
+                if (strcmp(symbol->token->value, symbol->token->value) == 0) {
                     // TODO make this clearer
-                    return stack_offset+search_scope->stack_size-current_entry->symbol->stack_position-current_entry->symbol->type->size;
+                    return stack_offset + search_scope->stack_size - symbol->stack_position - symbol->type->size;
                 }
-            }
-            current_entry = current_entry->next;
+            } while (list_next(&current_entry));
         }
+
         stack_offset += search_scope->stack_size;
         search_scope = search_scope->parent_scope;
     }

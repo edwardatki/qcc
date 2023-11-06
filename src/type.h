@@ -5,19 +5,12 @@ struct Token;
 
 enum TypeKind {TY_VOID, TY_POINTER, TY_FUNC, TY_CHAR, TY_INT};
 
-struct NodeListEntry;
-
 struct Type {
     char* name;
     enum TypeKind kind;
     int size;
     struct Type* base;
-    struct TypeListEntry* parameters;
-};
-
-struct TypeListEntry {
-    struct Type* type;
-    struct TypeListEntry* next;
+    struct List* parameters;
 };
 
 static struct Type type_void = {.name="void", .kind=TY_VOID, .size=0};

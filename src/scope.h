@@ -9,12 +9,7 @@ struct Scope {
     int depth;
     int id;
     int stack_size;
-    struct SymbolListEntry* symbol_list;
-};
-
-struct SymbolListEntry {
-    struct Symbol* symbol;
-    struct SymbolListEntry* next;
+    struct List* symbol_list;
 };
 
 void enter_new_scope();

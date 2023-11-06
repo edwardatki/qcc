@@ -5,10 +5,9 @@ struct Token;
 struct Symbol;
 struct Type;
 struct Scope;
+struct List;
 
 enum NodeKind {N_TYPE, N_PROGRAM, N_VAR_DECL, N_FUNC_DECL, N_BLOCK, N_VARIABLE, N_NUMBER, N_ASSIGNMENT, N_BINOP, N_UNARY, N_RETURN, N_IF, N_WHILE, N_FUNC_CALL, N_STRING};
-
-struct NodeListEntry;
 
 struct Node {
     struct Token* token;
@@ -20,8 +19,8 @@ struct Node {
 
     union {
         struct {
-            struct NodeListEntry* function_declarations;
-            struct NodeListEntry* global_variables;
+            struct List* function_declarations;
+            struct List* global_variables;
         } Program;
         struct {
             struct Symbol* symbol;
@@ -29,11 +28,11 @@ struct Node {
         } VarDecl;
         struct {
             struct Node* block;
-            struct NodeListEntry* formal_parameters;
+            struct List* formal_parameters;
         } FunctionDecl;
         struct {
-            struct NodeListEntry* statements;
-            struct NodeListEntry* variable_declarations;
+            struct List* statements;
+            struct List* variable_declarations;
         } Block;
         struct {
             struct Symbol* symbol;
@@ -64,15 +63,9 @@ struct Node {
         } While;
         struct {
             struct Symbol* symbol;
-            struct NodeListEntry* parameters;
+            struct List* parameters;
         } FuncCall;
     };
-};
-
-
-struct NodeListEntry {
-    struct Node* node;
-    struct NodeListEntry* next;
 };
 
 struct Node* parse(struct Token*);

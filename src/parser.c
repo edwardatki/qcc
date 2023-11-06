@@ -7,6 +7,7 @@
 #include "scope.h"
 #include "symbol.h"
 #include "type.h"
+#include "list.h"
 
 static struct Token* current_token;
 
@@ -34,7 +35,7 @@ static void eat() {
 
 
 static void eat_kind(enum TokenKind kind) {
-    char* messages[] = {"EOF", "'('", "')'", "'{'", "'}'", "','" "','", "'+'", "'-'", "'*'", "'/'", "'='", "a literal", "keyword 'return'", "an identifier", "a type", "';'", "keyword 'if'", "keyword 'else'", "'>'", "'<'", "'>='", "'<='", "'=='", "'!='", "keyword 'while'", "'&'", "'|'", "'<<'", "'>>'", "a string literal", "'++'", "'--'"};
+    char* messages[] = {"EOF", "'('", "')'", "'{'", "'}'", "','", "'+'", "'-'", "'*'", "'/'", "'='", "a literal", "keyword 'return'", "an identifier", "a type", "';'", "keyword 'if'", "keyword 'else'", "'>'", "'<'", "'>='", "'<='", "'=='", "'!='", "keyword 'while'", "'&'", "'|'", "'<<'", "'>>'", "a string literal", "'++'", "'--'"};
     if (current_token->kind != kind) {
         error(current_token, "expected %s but got %s", messages[kind], messages[current_token->kind]);
     }
@@ -48,27 +49,6 @@ static struct Type* get_symbol_type(struct Token* token) {
 
     // Pretty sure this error can never be reached as it wouldn't get through the lexer
     error(current_token, "unknown type '%s'", token->value);
-}
-
-static void add_node_list_entry(struct NodeListEntry** root_entry, struct Node* entryNode) {
-    if (*root_entry == NULL) {
-        *root_entry = calloc(1, sizeof(struct NodeListEntry));
-    }
-
-    struct NodeListEntry* current_entry = *root_entry;
-
-    *root_entry = current_entry;
-
-    // Travel to end of list
-    while (current_entry->next != NULL) {
-        current_entry = current_entry->next;
-    }
-
-    // Create new entry
-    struct NodeListEntry* new_entry = calloc(1, sizeof(struct NodeListEntry));
-    new_entry->node = entryNode;
-    new_entry->next = NULL;
-    current_entry->next = new_entry;
 }
 
 static struct Node* new_node(struct Token* token, enum NodeKind kind) {
@@ -93,20 +73,22 @@ static struct Node* function_call() {
     eat_kind(TK_LPAREN);
 
     if (!peek(TK_RPAREN)) {
-        struct TypeListEntry* formal_param = node->FuncCall.symbol->type->parameters;
-        while (1) {
-            if (formal_param->next == NULL) error(node->token, "too many parameters provided");
-            formal_param = formal_param->next;
+        struct List* current_entry = node->FuncCall.symbol->type->parameters;
+        do {
+            struct Type* formal_param = (struct Type*)current_entry->value;
 
             struct Node* expr_node = expr();
             
-            expr_node->type = get_common_type(expr_node->token, formal_param->type, expr_node->type);
-
-            add_node_list_entry(&node->FuncCall.parameters, expr_node);
+            expr_node->type = get_common_type(expr_node->token, formal_param, expr_node->type);
             
-            if (!peek(TK_COMMA)) break;
-            eat();
-        }
+            list_add(&node->FuncCall.parameters, expr_node);
+            
+            // If not at the end of expected parameters then should see a comma
+            if (current_entry->next != NULL) {
+                if (!peek(TK_COMMA)) error(current_token, "expected parameter of type '%s'", ((struct Type*)current_entry->next->value)->name);
+                eat();
+            }
+        } while (list_next(&current_entry));
     } else {
         if (node->FuncCall.symbol->type->parameters != NULL) error(node->token, "no parameters provided");
     }
@@ -487,10 +469,10 @@ static struct Node* block() {
     eat_kind(TK_LBRACE);
     while (!peek(TK_RBRACE)) {
         if (peek(TK_TYPE)) {
-            add_node_list_entry(&node->Block.statements, var_decl());
+            list_add(&node->Block.statements, var_decl());
             eat_kind(TK_SEMICOLON);
         } else {
-            add_node_list_entry(&node->Block.statements, statement());
+            list_add(&node->Block.statements, statement());
         }
     }
     eat_kind(TK_RBRACE);
@@ -522,7 +504,7 @@ static struct Node* function_decl() {
     if (!peek(TK_RPAREN)) {
         while (1) {
             struct Node* var_decl_node = var_decl();
-            add_node_list_entry(&node->FunctionDecl.formal_parameters, var_decl_node);
+            list_add(&node->FunctionDecl.formal_parameters, var_decl_node);
             add_parameter(node->type, var_decl_node->type);
             
             if (!peek(TK_COMMA)) break;
@@ -547,9 +529,9 @@ static struct Node* program () {
     node->type = &type_void;
     while (!peek(TK_END)) {
         if (peek3(TK_LPAREN)) {
-            add_node_list_entry(&node->Program.function_declarations, function_decl());
+            list_add(&node->Program.function_declarations, function_decl());
         } else {
-            add_node_list_entry(&node->Program.global_variables, var_decl());
+            list_add(&node->Program.global_variables, var_decl());
             eat_kind(TK_SEMICOLON);
         }
     }
