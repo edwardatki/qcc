@@ -17,7 +17,6 @@ struct Type* pointer_to(struct Type* base) {
     return type;
 }
 
-// TODO somehow keep track of parameters
 struct Type* function_of(struct Type* base) {
     struct Type *type = calloc(1, sizeof(struct Type));
     type->name = calloc(32, sizeof(char));
@@ -35,14 +34,8 @@ void add_parameter(struct Type* base, struct Type* new_parameter) {
 }
 
 // Get lowest common denominator type
-// TODO surely I need to generate code to convert between types here, hmmmm
+// These are essentially automatic casts
 struct Type* get_common_type(struct Token* token, struct Type* left, struct Type* right) {
-    // Promote int to pointer type but warn
-    if ((left->kind == TY_POINTER) && (right->kind == TY_INT)) {
-        warning(token, "assignment to '%s' from '%s' makes pointer from integer without a cast", left->name, right->name);
-        return left;
-    }
-
     // Promote char to int
     if ((left->kind == TY_INT) && (right->kind == TY_CHAR)) {
         return left;
@@ -50,6 +43,7 @@ struct Type* get_common_type(struct Token* token, struct Type* left, struct Type
         return right;
     }
     
+    // Any other mismatch is an error
     if (left->kind != right->kind) {
         error(token, "incompatible types '%s' and '%s'", left->name, right->name);
     }

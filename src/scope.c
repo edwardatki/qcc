@@ -54,7 +54,7 @@ void scope_add_symbol(struct Symbol* symbol) {
 }
 
 // Finds the "most local" symbol of given identifier
-struct Symbol* lookup_symbol(struct Token* token) {
+struct Symbol* lookup_symbol(struct Token* target_token) {
     struct Scope* search_scope = current_scope;
     while (search_scope != NULL) {
         // printf("SEARCHING SCOPE: %d for %s\n", search_scope->id, token->value);
@@ -62,13 +62,12 @@ struct Symbol* lookup_symbol(struct Token* token) {
         if (search_scope->symbol_list != NULL) {
             struct List* current_entry = search_scope->symbol_list;
             do {
-                struct Symbol* symbol = (struct Symbol*)current_entry->value;
+                struct Symbol* current_symbol = (struct Symbol*)current_entry->value;
 
                 // Check if matches the symbol we're looking for
-                // TODO: Type checking
                 // printf(" test: %s\n", symbol->token->value);
-                if (strcmp(symbol->token->value, token->value) == 0) {
-                    return symbol;
+                if (strcmp(current_symbol->token->value, target_token->value) == 0) {
+                    return current_symbol;
                 }
             } while (list_next(&current_entry));
         }
@@ -77,10 +76,10 @@ struct Symbol* lookup_symbol(struct Token* token) {
         search_scope = search_scope->parent_scope;
     }
 
-    error(token, "'%s' undeclared", token->value);
+    error(target_token, "'%s' undeclared", target_token->value);
 }
 
-int get_symbol_stack_offset(struct Symbol* symbol, struct Scope* scope) {
+int get_symbol_stack_offset(struct Symbol* target_symbol, struct Scope* scope) {
     // Traverse up from scope until symbol located adding up all stack sizes
     // This should give us offsets for variables on parent stack frames
 
@@ -92,12 +91,12 @@ int get_symbol_stack_offset(struct Symbol* symbol, struct Scope* scope) {
         if (search_scope->symbol_list != NULL) {
             struct List* current_entry = search_scope->symbol_list;
             do {
-                struct Symbol* symbol = (struct Symbol*)current_entry->value;
+                struct Symbol* current_symbol = (struct Symbol*)current_entry->value;
 
                 // Check if matches the symbol we're looking for
-                if (strcmp(symbol->token->value, symbol->token->value) == 0) {
+                if (strcmp(current_symbol->token->value, target_symbol->token->value) == 0) {
                     // TODO make this clearer
-                    return stack_offset + search_scope->stack_size - symbol->stack_position - symbol->type->size;
+                    return stack_offset + search_scope->stack_size - current_symbol->stack_position - target_symbol->type->size;
                 }
             } while (list_next(&current_entry));
         }

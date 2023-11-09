@@ -515,6 +515,9 @@ static void visit_return(struct Node* node, FILE *fp, int depth) {
     // Get return value
     struct Register* reg = visit(node->Return.expr, fp, depth+1);
 
+    // TODO return in a 16-bit register or on the stack
+    if (reg->size > 1) error(node->token, "only 8-bit return supported for now");
+
     // Move return value to accumulator if necessary
     if (strcmp(reg->name, "a") != 0) fprintf(fp, "\tmov a, %s\n", reg->name);
 

@@ -80,6 +80,8 @@ static struct Node* function_call() {
             struct Node* expr_node = expr();
             
             expr_node->type = get_common_type(expr_node->token, formal_param, expr_node->type);
+
+            if (expr_node->type != formal_param) error(expr_node->token, "expected parameter of type '%s' but got '%s'", formal_param->name, expr_node->type->name);
             
             list_add(&node->FuncCall.parameters, expr_node);
             
@@ -328,7 +330,16 @@ static struct Node* assignment () {
         node = new_node(token, N_ASSIGNMENT);
         node->Assignment.left = expr;
         node->Assignment.right = assignment();
-        node->type = get_common_type(token, node->Assignment.left->type, node->Assignment.right->type);
+        node->type = expr->type;
+        node->constant = node->Assignment.right->constant;
+
+        if ((node->type->kind == TY_POINTER) && (node->Assignment.right->type->kind == TY_INT)) {
+            warning(token, "assignment to '%s' from '%s' makes pointer from integer without a cast", node->type->name, node->Assignment.right->type->name);
+        }
+
+        if ((node->type->kind == TY_INT) && (node->Assignment.right->type->kind == TY_POINTER)) {
+            warning(token, "assignment to '%s' from '%s' makes intger from pointer without a cast", node->type->name, node->Assignment.right->type->name);
+        }
     }
 
     return node;
@@ -439,22 +450,15 @@ static struct Node* var_decl() {
     node->VarDecl.symbol = symbol;
     node->type = symbol->type;
     
-    eat_kind(TK_ID);
-
-    if (peek(TK_ASSIGN)) {
-        node->VarDecl.assignment = new_node(current_token, N_ASSIGNMENT);
-        node->VarDecl.assignment->type = node->type;
-        eat();
-        node->VarDecl.assignment->Assignment.left = new_node(current_token, N_VARIABLE);
-        node->VarDecl.assignment->Assignment.left->Variable.symbol = symbol;
-        node->VarDecl.assignment->Assignment.left->type = node->type;
-        node->VarDecl.assignment->Assignment.right = assignment();
+    if (peek2(TK_ASSIGN)) {
+        node->VarDecl.assignment = assignment();
 
         if (symbol->global) {
-            if (!node->VarDecl.assignment->Assignment.right->constant) error(node->VarDecl.assignment->token, "initializer element is not constant");
+            if (!node->VarDecl.assignment->constant) error(node->VarDecl.assignment->token, "initializer element is not constant");
         }
     } else {
         node->VarDecl.assignment = NULL;
+        eat_kind(TK_ID);
     }
 
     return node;
