@@ -1,7 +1,8 @@
 .DEFAULT_GOAL := main.bin
 
-run: main.bin
-	./main.bin test.c
+# TODO: improve this makefile
+examples: main.bin examples/*.c examples/*.h
+	cd examples; ../main.bin *.c
 
 main.bin: src/*
 	gcc src/*.c -o main.bin

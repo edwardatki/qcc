@@ -1,5 +1,3 @@
-char* str = "asdf";
-
 char getc() {
     char* terminal = 0x7000;
     return *terminal;
@@ -29,13 +27,4 @@ void print_hex_u8(char value) {
     if (low > 0x9) low = low - 0xA + 'A';
     else low = low + '0';
     putc(low);
-}
-
-char main() {
-    print(str);
-    putc('\n');
-    print("Hello world!");
-    putc('\n');
-
-    return 0;
 }

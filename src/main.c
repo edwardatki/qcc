@@ -25,7 +25,20 @@ int main(int argc, char **argv) {
     }
     
     if (input_filename == NULL) error(NULL, "no input file supplied");
-    if (output_filename == NULL) output_filename = "out.asm";
+    if (output_filename == NULL) {
+        // Attempt to set filename to input name but changed to .asm
+        output_filename = calloc(strlen(input_filename)+3, sizeof(char));
+        strcpy(output_filename, input_filename);
+        char *p = strstr(output_filename, ".");
+        if (p != NULL) {
+            memcpy(p, ".asm", 4);
+        } else {
+            free(output_filename);
+            output_filename = "out.asm";
+        }
+    }
+    
+    printf("%s -> %s\n", input_filename, output_filename);
 
     // Lex
     struct Token* first_token = lex(input_filename);
@@ -38,3 +51,4 @@ int main(int argc, char **argv) {
 
     return EXIT_SUCCESS;
 }
+

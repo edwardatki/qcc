@@ -7,7 +7,7 @@
 #include "symbol.h"
 #include "type.h"
 
-char* filename;
+char* current_filename;
 Token* current_token;
 
 int current_line = 1;
@@ -24,7 +24,7 @@ static void add_token(enum TokenKind kind, char* value, int line, int column) {
     current_token->next = token;
     current_token->kind = kind;
     current_token->value = value;
-    current_token->filename = filename;
+    current_token->filename = current_filename;
     if (value != NULL) current_token->length = strlen(value);
     else current_token->length = 0;
     current_token->line = line;
@@ -50,13 +50,13 @@ static int is_whitespace(char c) {
     return 0;
 }
 
-char* get_line(int index) {
-    FILE *fp = fopen(filename, "r");
+char* get_line(struct Token* token) {
+    FILE *fp = fopen(token->filename, "r");
     char* line = calloc(100, sizeof(char));
 
     int i = 1;
     while (fgets(line, 100, fp) != NULL) {
-        if (i == index) {
+        if (i == token->line) {
             fseek(fp, 0, SEEK_SET);
             return line;
         }
@@ -65,6 +65,46 @@ char* get_line(int index) {
 
     fclose(fp);
     return line;
+}
+
+static void check_preprocessor(FILE* fp, char c) {
+    int start_column = current_column;
+
+    char* value = calloc(32, sizeof(char));
+    int i = 0;
+    while(1) {
+        value[i++] = c;
+        if (!(isalnum(peek(fp)) || (peek(fp) == '_'))) break;
+        c = next(fp);
+    }
+
+    if (strcmp(value, "#include") == 0) {
+        char* new_filename = calloc(32, sizeof(char));
+        int i = 0;
+        while(1) { // Skip whitespace
+            c = next(fp);
+            if (c == '\"') break;
+        }
+        while(1) { // Get filename
+            c = next(fp);
+            if (c == '\"') break;
+            new_filename[i++] = c;
+        }
+
+        char* tmp_filename = current_filename;
+        char tmp_line = current_line;
+        char tmp_column = current_column;
+
+        printf("include %s start\n", new_filename);
+        lex(new_filename);
+        printf("include %s end\n", new_filename);
+        
+        current_filename = tmp_filename;
+        current_line = tmp_line;
+        current_column = tmp_column;
+    }
+
+    free(value);
 }
 
 static void check_char_literal(FILE* fp, char c) {
@@ -141,13 +181,16 @@ static void check_keyword(FILE* fp, char c) {
 // TODO Things could be easier if we just read the whole file into memory
 // Token values could just point into the file data and we add a length variable
 struct Token* lex(char* _filename) {
-    filename = _filename;
+    current_filename = _filename;
 
-    FILE *fp = fopen(filename, "r");
-    if (!fp) error(NULL, "unable to open file '%s'", filename);
+    FILE *fp = fopen(current_filename, "r");
+    if (!fp) error(NULL, "unable to open file '%s'", current_filename);
 
-    struct Token* first_token = new_token(TK_END);
-    current_token = first_token;
+    static struct Token* first_token;
+    if (first_token == NULL) {
+        first_token = new_token(TK_END);
+        current_token = first_token;
+    }
 
     while (1) {
         char c = next(fp);
@@ -163,7 +206,6 @@ struct Token* lex(char* _filename) {
 
         // Exit at end of file
         if (c == EOF) {
-            add_token(TK_END, NULL, current_line, current_column);
             break;
         }
 
@@ -211,7 +253,9 @@ struct Token* lex(char* _filename) {
         if (c == '\'') {check_char_literal(fp, c); continue;}
         if (c == '\"') {check_string_literal(fp, c); continue;}
 
-        printf("%s:%d:%d: ", filename, current_line, current_column); 
+        if (c == '#') {check_preprocessor(fp, c); continue;}
+
+        printf("%s:%d:%d: ", current_filename, current_line, current_column); 
         error(NULL, "unrecognized token");
     }
 

@@ -197,13 +197,14 @@ static struct Register* visit_string(struct Node* node, FILE *fp, int depth) {
     static int label_count = 0;
 
     // TODO this is a nasty hack, constant data should go at end of file
-    fprintf(fp, "\tjmp $+%d+3\n", (int)strlen(node->token->value)-1);
-    fprintf(fp, "string_%d:\n", label_count);
+    fprintf(fp, "\tjmp .string_skip_%d\n", label_count);
+    fprintf(fp, ".string_%d:\n", label_count);
     fprintf(fp, "\t#d %s\n", node->token->value);
     fprintf(fp, "\t#d8 0\n");
+    fprintf(fp, ".string_skip_%d:\n", label_count);
 
     struct Register* reg = allocate_reg(node->type->size);
-    fprintf(fp, "\tmov %s, string_%d\n", reg->name, label_count);
+    fprintf(fp, "\tmov %s, .string_%d\n", reg->name, label_count);
 
     label_count += 1;
 

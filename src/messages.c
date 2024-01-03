@@ -7,7 +7,7 @@
 // TODO some weirdness when token near EOF
 static void print_token_context(struct Token* token, const char* color) {
     printf(WHT "%4d | ", token->line);
-    char* line = get_line(token->line);
+    char* line = get_line(token);
     int i = 0;
     int skip_whitespace = 0;
     while (1) {

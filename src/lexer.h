@@ -9,15 +9,17 @@ enum TokenKind {TK_END=0, TK_LPAREN, TK_RPAREN, TK_LBRACE, TK_RBRACE, TK_COMMA, 
 
 struct Token {
     enum TokenKind kind;
-    char* filename;
     char *value;
-    int length;
-    struct Token *next;
+
+    char* filename;
     int line;
     int column;
+    int length;
+
+    struct Token *next;
 };
 
 struct Token* lex(char*);
-char* get_line(int);
+char* get_line(struct Token*);
 
 #endif
