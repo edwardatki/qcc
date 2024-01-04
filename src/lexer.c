@@ -13,10 +13,16 @@ Token* current_token;
 int current_line = 1;
 int current_column = 0;
 
-static struct Token* new_token(enum TokenKind kind) {
+struct Token* new_token(enum TokenKind kind) {
     struct Token* token = calloc(1, sizeof(Token));
     token->kind = kind;
     return token;
+}
+
+struct Token* duplicate_token(struct Token* token) {
+    struct Token* new_token = calloc(1, sizeof(Token));
+    memcpy(new_token, token, sizeof(Token));
+    return new_token;
 }
 
 static void add_token(enum TokenKind kind, char* value, int line, int column) {
@@ -102,6 +108,9 @@ static void check_preprocessor(FILE* fp, char c) {
         current_filename = tmp_filename;
         current_line = tmp_line;
         current_column = tmp_column;
+    } else {
+        printf("%s:%d:%d: ", current_filename, current_line, current_column); 
+        error(NULL, "invalid preprocessing directive %s", value);
     }
 
     free(value);
@@ -125,7 +134,7 @@ static void check_char_literal(FILE* fp, char c) {
 static void check_string_literal(FILE* fp, char c) {
     int start_column = current_column;
 
-    char* value = calloc(32, sizeof(char));
+    char* value = calloc(128, sizeof(char));
     int i = 0;
     value[i++] = c;
     while(1) {

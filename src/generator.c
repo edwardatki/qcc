@@ -115,7 +115,6 @@ static void visit_program(struct Node* node, FILE *fp, int depth) {
     printf("Program:\n");
 
     // Program setup
-    fprintf(fp, "#include \"architecture.asm\"\n\n");
     fprintf(fp, "#bank RAM\n\n");
     fprintf(fp, "#addr 0x8100\n\n");
 
@@ -356,21 +355,25 @@ static struct Register* visit_bin_op(struct Node* node, FILE *fp, int depth) {
         fprintf(fp, "\tmov a, 0\n");
 
         fprintf(fp, ".cmp_less_exit_%d:\n", label_count);
+
+        label_count++;
     } else if (strcmp(node->token->value, ">=") == 0) {
         static int label_count = 0;
         
         fprintf(fp, "\tcmp %s\n", right_reg->name);
-        fprintf(fp, "\tjne .cmp_more_equal_true_%d\n", label_count); // A == right
+        fprintf(fp, "\tje .cmp_more_equal_true_%d\n", label_count); // A == right
         fprintf(fp, "\tjnc .cmp_more_equal_false_%d\n", label_count); // A <= right
 
         fprintf(fp, ".cmp_more_equal_true_%d:\n", label_count);
         fprintf(fp, "\tmov a, 1\n");
-        fprintf(fp, "\tjmp .cmp_more_exit_%d\n", label_count);
+        fprintf(fp, "\tjmp .cmp_more_equal_exit_%d\n", label_count);
 
         fprintf(fp, ".cmp_more_equal_false_%d:\n", label_count);
         fprintf(fp, "\tmov a, 0\n");
 
         fprintf(fp, ".cmp_more_equal_exit_%d:\n", label_count);
+
+        label_count++;
     } else if (strcmp(node->token->value, "<=") == 0) {
         static int label_count = 0;
         
@@ -385,6 +388,8 @@ static struct Register* visit_bin_op(struct Node* node, FILE *fp, int depth) {
         fprintf(fp, "\tmov a, 0\n");
 
         fprintf(fp, ".cmp_less_equal_exit_%d:\n", label_count);
+
+        label_count++;
     } else if (strcmp(node->token->value, "==") == 0) {
         static int label_count = 0;
         
@@ -399,6 +404,8 @@ static struct Register* visit_bin_op(struct Node* node, FILE *fp, int depth) {
         fprintf(fp, "\tmov a, 0\n");
 
         fprintf(fp, ".cmp_equal_exit_%d:\n", label_count);
+
+        label_count++;
     } else if (strcmp(node->token->value, "!=") == 0) {
         static int label_count = 0;
         
@@ -413,6 +420,8 @@ static struct Register* visit_bin_op(struct Node* node, FILE *fp, int depth) {
         fprintf(fp, "\tmov a, 0\n");
 
         fprintf(fp, ".cmp_not_equal_exit_%d:\n", label_count);
+
+        label_count++;
     } else {
         fprintf(fp, "\t???\n");
     }
@@ -485,19 +494,19 @@ static struct Register* visit_unary_op(struct Node* node, FILE *fp, int depth) {
         struct Register* pointer_reg = get_address(node->UnaryOp.left, fp, depth+1);
 
         return pointer_reg;
-    } else if (strcmp(node->token->value, "++") == 0) {
+    } else if (node->token->kind == TK_INC) {
         printf("%s\t", node->type->name);
         print_indent(depth);
-        printf("UnaryOp: %s\n", node->token->value);
+        printf("UnaryOp: ++\n");
 
         struct Register* left_reg = visit(node->UnaryOp.left, fp, depth+1);
         fprintf(fp, "\tinc %s\n", left_reg->name);
 
         return left_reg;
-    } else if (strcmp(node->token->value, "--") == 0) {
+    } else if (node->token->kind == TK_DEC) {
         printf("%s\t", node->type->name);
         print_indent(depth);
-        printf("UnaryOp: %s\n", node->token->value);
+        printf("UnaryOp: --\n");
 
         struct Register* left_reg = visit(node->UnaryOp.left, fp, depth+1);
         fprintf(fp, "\tdec %s\n", left_reg->name);
@@ -712,7 +721,7 @@ static struct Register* visit(struct Node* node, FILE *fp, int depth) {
 
 void generate(struct Node* root_node, char* filename) {
     FILE *fp = fopen(filename, "w");
-    if (!fp) error(NULL, "unable to open file '%s'", filename);
+    if (!fp) error(NULL, "unable to create output file '%s'", filename);
 
     visit(root_node, fp, 0);
 

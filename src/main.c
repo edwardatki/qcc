@@ -9,7 +9,7 @@
 int main(int argc, char **argv) {
     char* input_filename = NULL;
     char* output_filename = NULL;
-    
+
     // Process arguments
     int i = 1;
     while (i < argc) {
@@ -18,6 +18,7 @@ int main(int argc, char **argv) {
             output_filename = argv[i+1];
             i += 2;
         } else {
+            // TODO handle multiple input files
             if (input_filename != NULL) error(NULL, "more than one input file supplied");
             input_filename = argv[i];
             i += 1;
@@ -38,7 +39,7 @@ int main(int argc, char **argv) {
         }
     }
     
-    printf("%s -> %s\n", input_filename, output_filename);
+    // printf("%s -> %s\n", input_filename, output_filename);
 
     // Lex
     struct Token* first_token = lex(input_filename);

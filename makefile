@@ -1,12 +1,29 @@
-.DEFAULT_GOAL := main.bin
+.DEFAULT_GOAL := qcc
 
-# TODO: improve this makefile
-examples: main.bin examples/*.c examples/*.h
-	cd examples; ../main.bin *.c
+#Build
+qcc: src/*
+	gcc src/*.c -o qcc
 
-main.bin: src/*
-	gcc src/*.c -o main.bin
+# Test all
+test: clean $(addprefix  test_, $(basename $(notdir $(wildcard tests/*.c))))
+	cd tools; ./test_summary.sh
 
 clean:
-	mkdir -p build
-	rm -f build/*
+	rm -r tests/build
+	rm -r tests/results
+
+# Compiler test
+tests/build/%.asm: tests/%.c qcc
+	mkdir -p tests/build
+	cd tests; ../qcc $(notdir $<) -o build/$(notdir $(basename $<)).asm
+
+# Assemble test
+tests/build/%.bin: tests/build/%.asm
+	customasm $< tools/architecture.asm -f binary -o tests/build/$(notdir $(basename $<)).bin
+
+# Run test
+test_%: tests/build/%.bin
+	mkdir -p tests/results
+	rm -f tests/results/$(notdir $(basename $<)).pass
+	touch tests/results/$(notdir $(basename $<)).fail
+	./tools/emulator tests/build/$(notdir $(basename $<)).bin -n && rm -f tests/results/$(notdir $(basename $<)).fail && touch tests/results/$(notdir $(basename $<)).pass || true

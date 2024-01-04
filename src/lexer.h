@@ -20,6 +20,8 @@ struct Token {
 };
 
 struct Token* lex(char*);
+struct Token* new_token(enum TokenKind);
+struct Token* duplicate_token(struct Token* token);
 char* get_line(struct Token*);
 
 #endif

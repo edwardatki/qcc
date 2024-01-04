@@ -1,10 +1,10 @@
+char*  terminal = 0x7000;
+
 char getc() {
-    char* terminal = 0x7000;
     return *terminal;
 }
 
 void putc(char c) {
-    char* terminal = 0x7000;
     *terminal = c;
 }
 
@@ -12,7 +12,7 @@ void print(char* str) {
     char c = *str;
     while (c != '\0') {
         putc(*str);
-        str++;
+        ++str;
         c = *str;
     }
 }

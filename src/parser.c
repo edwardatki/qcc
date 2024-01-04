@@ -100,7 +100,7 @@ static struct Node* function_call() {
     return node;
 }
 
-// factor : ((PLUS | MINUS) factor) | (AMPERSAND) variable (INC | DEC) | ASTERISK additive_expr| NUMBER | STRING | ID | ID LPAREN (expr COMMA)* RPAREN | assignment | LPAREN expr RPAREN
+// factor : (PLUS | MINUS) factor | (AMPERSAND) (INC | DEC) variable (INC | DEC) | ASTERISK factor | NUMBER | STRING | ID | ID LPAREN (expr COMMA)* RPAREN | assignment | LPAREN expr RPAREN
 static struct Node* factor () {
     if (peek(TK_PLUS) || peek(TK_MINUS)) {
         struct Node* node = new_node(current_token, N_UNARY);
@@ -130,7 +130,7 @@ static struct Node* factor () {
         struct Node* node = new_node(current_token, N_UNARY);
         eat();
 
-        struct Node* left_node = additive_expr();
+        struct Node* left_node = factor();
 
         if (left_node->type->kind != TY_POINTER) {
             error(left_node->token, "left must be a pointer");
@@ -172,31 +172,64 @@ static struct Node* factor () {
 
         node->constant = 1;
         return node;
-    } else if (peek(TK_ID)) {
-        if (peek2(TK_LPAREN)) {
+    } else if (peek(TK_ID) || peek(TK_INC) || peek(TK_DEC)) {
+        if (peek2(TK_LPAREN) && !(peek(TK_INC) || peek(TK_DEC))) {
             return function_call();
         }
         else {
+            struct Token *preop_token = NULL;
+            if (peek(TK_INC) || peek(TK_DEC)) {
+                preop_token = current_token;
+                eat();
+            }
+
             // Lookup symbol from current scope
             struct Node* node = new_node(current_token, N_VARIABLE);
             node->Variable.symbol = lookup_symbol(current_token);
             node->type = node->Variable.symbol->type;
             eat();
 
-            // TODO this is actually pre not post as it should be
-            if (peek(TK_INC) || peek(TK_DEC)) {
-                struct Node* assignment_node = new_node(current_token, N_ASSIGNMENT);
-                struct Node* unary_node = new_node(current_token, N_UNARY);
-                eat();
+            // TODO these are kind of hacked on, should really be handled more in the generator
+            if (preop_token != NULL) {
+                struct Node* assignment_node = new_node(preop_token, N_ASSIGNMENT);
+                struct Node* unary_node = new_node(preop_token, N_UNARY);
 
+                // Inc or dec
                 unary_node->UnaryOp.left = node;
                 unary_node->type = node->type;
 
+                // Assign back to variable
                 assignment_node->Assignment.left = node;
                 assignment_node->Assignment.right = unary_node;
                 assignment_node->type = node->type;
 
                 node = assignment_node;
+            } else { // Only allow pre or post not both, pre has priority
+                if (peek(TK_INC) || peek(TK_DEC)) {
+                    struct Node* assignment_node = new_node(current_token, N_ASSIGNMENT);
+                    struct Node* unary_node = new_node(current_token, N_UNARY);
+                    struct Node* second_unary_node = new_node(current_token, N_UNARY);
+
+                    // Inc or dec
+                    unary_node->UnaryOp.left = node;
+                    unary_node->type = node->type;
+
+                    // Assign back to variable
+                    assignment_node->Assignment.left = node;
+                    assignment_node->Assignment.right = unary_node;
+                    assignment_node->type = node->type;
+
+                    // Undo operation lol, this is a stupid implementation
+                    second_unary_node->UnaryOp.left = assignment_node;
+                    second_unary_node->type = node->type;
+                    second_unary_node->token = duplicate_token(current_token);
+                    if (second_unary_node->token->kind == TK_INC) second_unary_node->token->kind = TK_DEC;
+                    else second_unary_node->token->kind = TK_INC;
+
+                    node = second_unary_node;
+
+                    eat();
+                }
             }
 
             return node;
