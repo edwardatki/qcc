@@ -129,6 +129,9 @@ static void visit_program(struct Node* node, FILE *fp, int depth) {
 
     // Generate code for all functions
     visit_all(node->Program.function_declarations, fp, depth+1);
+
+    // Label address at end of program, heap starts here
+    fprintf(fp, "HEAP_START:\n\n");
 }
 
 static void visit_var_decl(struct Node* node, FILE *fp, int depth) {
@@ -523,6 +526,7 @@ static void visit_return(struct Node* node, FILE *fp, int depth) {
     printf("Return:\n");
 
     // Get return value
+    // TODO can't return nothing lol
     struct Register* reg = visit(node->Return.expr, fp, depth+1);
 
     // TODO return in a 16-bit register or on the stack
@@ -545,6 +549,8 @@ static void visit_if(struct Node* node, FILE *fp, int depth) {
     printf("If:\n");
 
     static int label_count = 0;
+    int tmp_label_count = label_count;
+    label_count++;
 
     // Get test value
     struct Register* reg = visit(node->Return.expr, fp, depth+1);
@@ -568,21 +574,19 @@ static void visit_if(struct Node* node, FILE *fp, int depth) {
     }
 
     // Jump if equal 0
-    fprintf(fp, "\tje .if_false_%d\n", label_count);
+    fprintf(fp, "\tje .if_false_%d\n", tmp_label_count);
     free_reg(reg);
 
     // Visit true branch
-    fprintf(fp, ".if_true_%d:\n", label_count);
+    fprintf(fp, ".if_true_%d:\n", tmp_label_count);
     free_reg(visit(node->If.true_statement, fp, depth+1));
-    fprintf(fp, "\tjmp .if_exit_%d\n", label_count);
+    fprintf(fp, "\tjmp .if_exit_%d\n", tmp_label_count);
 
     // Visit false branch
-    fprintf(fp, ".if_false_%d:\n", label_count);
+    fprintf(fp, ".if_false_%d:\n", tmp_label_count);
     if (node->If.false_statement != NULL) free_reg(visit(node->If.false_statement, fp, depth+1));
 
-    fprintf(fp, ".if_exit_%d:\n", label_count);
-
-    label_count++;
+    fprintf(fp, ".if_exit_%d:\n", tmp_label_count);
 }
 
 static void visit_while(struct Node* node, FILE *fp, int depth) {
@@ -591,8 +595,10 @@ static void visit_while(struct Node* node, FILE *fp, int depth) {
     printf("While:\n");
 
     static int label_count = 0;
+    int tmp_label_count = label_count;
+    label_count++;
 
-    fprintf(fp, ".while_start_%d:\n", label_count);
+    fprintf(fp, ".while_start_%d:\n", tmp_label_count);
 
     // Get test value
     struct Register* reg = visit(node->Return.expr, fp, depth+1);
@@ -616,19 +622,19 @@ static void visit_while(struct Node* node, FILE *fp, int depth) {
     }
 
     // Jump if equal 0
-    fprintf(fp, "\tje .while_exit_%d\n", label_count);
+    fprintf(fp, "\tje .while_exit_%d\n", tmp_label_count);
     free_reg(reg);
 
     // Visit loop statement
-    fprintf(fp, ".while_contents_%d:\n", label_count);
+    fprintf(fp, ".while_contents_%d:\n", tmp_label_count);
     free_reg(visit(node->While.loop_statement, fp, depth+1));
 
     // Go back to start of loop
-    fprintf(fp, "\tjmp .while_start_%d\n", label_count);
+    fprintf(fp, "\tjmp .while_start_%d\n", tmp_label_count);
 
-    fprintf(fp, ".while_exit_%d:\n", label_count);
+    fprintf(fp, ".while_exit_%d:\n", tmp_label_count);
 
-    label_count++;
+    tmp_label_count++;
 }
 
 static struct Register* visit_func_call(struct Node* node, FILE *fp, int depth) {

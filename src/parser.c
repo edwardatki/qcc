@@ -74,12 +74,22 @@ static struct Node* function_call() {
 
     if (!peek(TK_RPAREN)) {
         struct List* current_entry = node->FuncCall.symbol->type->parameters;
+        if (current_entry == NULL) error(current_token, "too many arguments to function");
         do {
             struct Type* formal_param = (struct Type*)current_entry->value;
 
             struct Node* expr_node = expr();
-            
-            expr_node->type = get_common_type(expr_node->token, formal_param, expr_node->type);
+
+            // TODO move a bunch of this to type.c
+            if ((expr_node->type->kind == TY_POINTER) && (formal_param->kind == TY_INT)) {
+                warning(expr_node->token, "passing argument makes pointer from integer without a cast" );
+                expr_node->type = formal_param;
+            } else if ((formal_param->kind == TY_INT) && (expr_node->type->kind == TY_POINTER)) {
+                warning(expr_node->token, "passing argument makes integer from pointer without a cast");
+                expr_node->type = formal_param;
+            } else {
+                expr_node->type = get_common_type(expr_node->token, formal_param, expr_node->type);
+            }
 
             if (expr_node->type != formal_param) error(expr_node->token, "expected parameter of type '%s' but got '%s'", formal_param->name, expr_node->type->name);
             
@@ -366,12 +376,13 @@ static struct Node* assignment () {
         node->type = expr->type;
         node->constant = node->Assignment.right->constant;
 
+        // TODO move a bunch of this to type.c
         if ((node->type->kind == TY_POINTER) && (node->Assignment.right->type->kind == TY_INT)) {
-            warning(token, "assignment to '%s' from '%s' makes pointer from integer without a cast", node->type->name, node->Assignment.right->type->name);
-        }
-
-        if ((node->type->kind == TY_INT) && (node->Assignment.right->type->kind == TY_POINTER)) {
-            warning(token, "assignment to '%s' from '%s' makes intger from pointer without a cast", node->type->name, node->Assignment.right->type->name);
+            warning(node->token, "assignment to '%s' from '%s' makes pointer from integer without a cast", node->type->name, node->Assignment.right->type->name);
+        } else if ((node->type->kind == TY_INT) && (node->Assignment.right->type->kind == TY_POINTER)) {
+            warning(node->token, "assignment to '%s' from '%s' makes integer from pointer without a cast", node->type->name, node->Assignment.right->type->name);
+        } else if (get_common_type(current_token, node->type, node->Assignment.right->type)->kind != node->type->kind) {
+            error(node->token, "cannot assign '%s' to '%s'", node->Assignment.right->type->name, node->type->name);
         }
     }
 
@@ -522,7 +533,6 @@ static struct Node* block() {
 // Probably should be a list of statements rather than a block, would make code generation a bit neater
 // function_decl : type ID LPAREN (FORMAL_PARAMETERS)? RPAREN block
 static struct Node* function_decl() {
-
     struct Type* symbolType = function_of(type());
     struct Node* node = new_node(current_token, N_FUNC_DECL);
     node->type = symbolType;
@@ -565,7 +575,14 @@ static struct Node* program () {
     struct Node* node = new_node(current_token, N_PROGRAM);
     node->type = &type_void;
     while (!peek(TK_END)) {
-        if (peek3(TK_LPAREN)) {
+        // TODO this is gross please fix
+        struct Token* revert_token = current_token;
+        struct Type* type_node = type();
+        eat(TK_ID);
+        int is_func = peek(TK_LPAREN);
+        current_token = revert_token;
+
+        if (is_func) {
             list_add(&node->Program.function_declarations, function_decl());
         } else {
             list_add(&node->Program.global_variables, var_decl());
@@ -580,6 +597,14 @@ struct Node* parse(Token* first_token) {
 
     // Global scope
     enter_new_scope();
+
+    // Temporary
+    struct Symbol* symbol = calloc(1, sizeof(struct Symbol));
+    symbol->type = pointer_to(&type_void);
+    symbol->token = new_token(TK_ID);
+    symbol->token->value = "HEAP_START";
+    symbol->token->filename = "n/a";
+    scope_add_symbol(symbol);
 
     struct Node* root_node = program();
     

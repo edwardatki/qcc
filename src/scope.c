@@ -39,6 +39,8 @@ struct Scope* get_current_scope() {
 }
 
 void scope_add_symbol(struct Symbol* symbol) {
+    if (declared_in_current_scope(symbol->token)) error(symbol->token, "symbol already declared");
+
     list_add(&current_scope->symbol_list, symbol);
 
     // Check if in global scope
@@ -51,6 +53,23 @@ void scope_add_symbol(struct Symbol* symbol) {
         symbol->stack_position = current_scope->stack_size;
         current_scope->stack_size += symbol->type->size;
     }
+}
+
+// Check if symbol had already been declared in the current scope
+int declared_in_current_scope(struct Token* target_token) {
+    if (current_scope->symbol_list != NULL) {
+        struct List* current_entry = current_scope->symbol_list;
+        do {
+            struct Symbol* current_symbol = (struct Symbol*)current_entry->value;
+
+            // Check if matches the symbol we're looking for
+            if (strcmp(current_symbol->token->value, target_token->value) == 0) {
+                return 1;
+            }
+        } while (list_next(&current_entry));
+    }
+
+    return 0;
 }
 
 // Finds the "most local" symbol of given identifier

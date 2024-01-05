@@ -97,6 +97,7 @@ static void check_preprocessor(FILE* fp, char c) {
             new_filename[i++] = c;
         }
 
+        // TODO error message from included files are broken
         char* tmp_filename = current_filename;
         char tmp_line = current_line;
         char tmp_column = current_column;
@@ -184,6 +185,7 @@ static void check_keyword(FILE* fp, char c) {
     else if (strcmp(value, "if") == 0) add_token(TK_IF, value, current_line, start_column);
     else if (strcmp(value, "else") == 0) add_token(TK_ELSE, value, current_line, start_column);
     else if (strcmp(value, "while") == 0) add_token(TK_WHILE, value, current_line, start_column);
+    else if (strcmp(value, "NULL") == 0) add_token(TK_NUMBER, "0", current_line, start_column); // Just kinda bodged a NULL in here lol
     else add_token(TK_ID, value, current_line, start_column);
 }
 
