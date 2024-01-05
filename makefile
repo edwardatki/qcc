@@ -15,11 +15,13 @@ clean:
 # Compiler test
 tests/build/%.asm: tests/%.c qcc
 	mkdir -p tests/build
-	cd tests; ../qcc $(notdir $<) -o build/$(notdir $(basename $<)).asm
+	rm -f tests/build/$(notdir $(basename $<)).log
+	cd tests; ../qcc $(notdir $<) -o build/$(notdir $(basename $<)).asm >> build/$(notdir $(basename $<)).log || true
+	cat tests/build/$(notdir $(basename $<)).log
 
 # Assemble test
 tests/build/%.bin: tests/build/%.asm
-	customasm $< tools/architecture.asm -f binary -o tests/build/$(notdir $(basename $<)).bin
+	customasm $< tools/architecture.asm -f binary -o tests/build/$(notdir $(basename $<)).bin || true
 
 # Run test
 test_%: tests/build/%.bin
@@ -27,3 +29,7 @@ test_%: tests/build/%.bin
 	rm -f tests/results/$(notdir $(basename $<)).pass
 	touch tests/results/$(notdir $(basename $<)).fail
 	./tools/emulator tests/build/$(notdir $(basename $<)).bin -n && rm -f tests/results/$(notdir $(basename $<)).fail && touch tests/results/$(notdir $(basename $<)).pass || true
+
+# Print compiler log
+log_%: tests/%.c
+	cat tests/build/$(notdir $(basename $<)).log

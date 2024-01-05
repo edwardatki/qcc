@@ -381,7 +381,7 @@ static struct Node* assignment () {
             warning(node->token, "assignment to '%s' from '%s' makes pointer from integer without a cast", node->type->name, node->Assignment.right->type->name);
         } else if ((node->type->kind == TY_INT) && (node->Assignment.right->type->kind == TY_POINTER)) {
             warning(node->token, "assignment to '%s' from '%s' makes integer from pointer without a cast", node->type->name, node->Assignment.right->type->name);
-        } else if (get_common_type(current_token, node->type, node->Assignment.right->type)->kind != node->type->kind) {
+        } else if (get_common_type(node->token, node->type, node->Assignment.right->type)->kind != node->type->kind) {
             error(node->token, "cannot assign '%s' to '%s'", node->Assignment.right->type->name, node->type->name);
         }
     }

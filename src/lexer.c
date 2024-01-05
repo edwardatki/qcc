@@ -10,8 +10,8 @@
 char* current_filename;
 Token* current_token;
 
-int current_line = 1;
-int current_column = 0;
+int current_line;
+int current_column;
 
 struct Token* new_token(enum TokenKind kind) {
     struct Token* token = calloc(1, sizeof(Token));
@@ -193,6 +193,8 @@ static void check_keyword(FILE* fp, char c) {
 // Token values could just point into the file data and we add a length variable
 struct Token* lex(char* _filename) {
     current_filename = _filename;
+    current_line = 1;
+    current_column = 0;
 
     FILE *fp = fopen(current_filename, "r");
     if (!fp) error(NULL, "unable to open file '%s'", current_filename);
