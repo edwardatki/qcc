@@ -11,6 +11,7 @@ struct Symbol {
     struct Type* type;
     int global;
     int stack_position;
+    int is_extern;
 };
 
 #endif

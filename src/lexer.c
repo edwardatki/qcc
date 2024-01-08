@@ -102,9 +102,9 @@ static void check_preprocessor(FILE* fp, char c) {
         char tmp_line = current_line;
         char tmp_column = current_column;
 
-        printf("include %s start\n", new_filename);
+        // printf("include %s start\n", new_filename);
         lex(new_filename);
-        printf("include %s end\n", new_filename);
+        // printf("include %s end\n", new_filename);
         
         current_filename = tmp_filename;
         current_line = tmp_line;
@@ -185,6 +185,7 @@ static void check_keyword(FILE* fp, char c) {
     else if (strcmp(value, "if") == 0) add_token(TK_IF, value, current_line, start_column);
     else if (strcmp(value, "else") == 0) add_token(TK_ELSE, value, current_line, start_column);
     else if (strcmp(value, "while") == 0) add_token(TK_WHILE, value, current_line, start_column);
+    else if (strcmp(value, "extern") == 0) add_token(TK_EXTERN, value, current_line, start_column);
     else if (strcmp(value, "NULL") == 0) add_token(TK_NUMBER, "0", current_line, start_column); // Just kinda bodged a NULL in here lol
     else add_token(TK_ID, value, current_line, start_column);
 }
@@ -273,6 +274,6 @@ struct Token* lex(char* _filename) {
     }
 
     fclose(fp);
-    
+
     return first_token;
 }

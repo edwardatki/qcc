@@ -29,7 +29,8 @@ struct Type* function_of(struct Type* base) {
 }
 
 void add_parameter(struct Type* base, struct Type* new_parameter) {
-    sprintf(base->name, "%s\b%s%s)", base->name, (base->parameters != NULL) ? "," : "", new_parameter->name);
+    base->name[strlen(base->name)-1] = '\0'; // Erase last character aka ')'
+    sprintf(base->name, "%s%s%s)", base->name, (base->parameters != NULL) ? "," : "", new_parameter->name);
     list_add(&base->parameters, new_parameter);
 }
 

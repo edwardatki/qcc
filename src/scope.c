@@ -38,23 +38,6 @@ struct Scope* get_current_scope() {
     return current_scope;
 }
 
-void scope_add_symbol(struct Symbol* symbol) {
-    if (declared_in_current_scope(symbol->token)) error(symbol->token, "symbol already declared");
-
-    list_add(&current_scope->symbol_list, symbol);
-
-    // Check if in global scope
-    if (current_scope->id == 0) {
-        symbol->global = 1;
-    } else {
-        symbol->global = 0;
-
-        // Allocate position on stack
-        symbol->stack_position = current_scope->stack_size;
-        current_scope->stack_size += symbol->type->size;
-    }
-}
-
 // Check if symbol had already been declared in the current scope
 int declared_in_current_scope(struct Token* target_token) {
     if (current_scope->symbol_list != NULL) {
@@ -71,6 +54,27 @@ int declared_in_current_scope(struct Token* target_token) {
 
     return 0;
 }
+
+// Add symbol to current scope
+void scope_add_symbol(struct Symbol* symbol) {
+    if (declared_in_current_scope(symbol->token)) error(symbol->token, "symbol already declared");
+
+    list_add(&current_scope->symbol_list, symbol);
+
+    // Check if in global scope
+    if (current_scope->id == 0) {
+        symbol->global = 1;
+    } else {
+        symbol->global = 0;
+
+        // Allocate position on stack
+        if (!symbol->is_extern) {
+            symbol->stack_position = current_scope->stack_size;
+            current_scope->stack_size += symbol->type->size;
+        }
+    }
+}
+
 
 // Finds the "most local" symbol of given identifier
 struct Symbol* lookup_symbol(struct Token* target_token) {

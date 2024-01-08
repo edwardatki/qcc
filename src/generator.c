@@ -86,18 +86,18 @@ static struct Register* get_address(struct Node* node, FILE *fp, int depth) {
     struct Register* pointer_reg;
 
     if (node->kind == N_VARIABLE) {
-        printf("%s\t", node->type->name);
+        printf("%-32s", node->type->name);
         print_indent(depth);
         printf("Variable: %s\n", node->Assignment.left->token->value);
 
         pointer_reg = allocate_reg(2);
-        if (node->Variable.symbol->global) {
+        if (node->Variable.symbol->global || node->Variable.symbol->is_extern) {
             fprintf(fp, "\tmov %s, %s\n", pointer_reg->name, node->Variable.symbol->token->value);
         } else {
             fprintf(fp, "\tmov %s, sp+%d ; %s\n", pointer_reg->name, get_symbol_stack_offset(node->Variable.symbol, node->scope)+local_stack_usage, node->Variable.symbol->token->value);
         }
     } else if ((node->kind == N_UNARY) && (strcmp(node->token->value, "*") == 0)) {
-        printf("%s\t", node->type->name);
+        printf("%-32s", node->type->name);
         print_indent(depth);
         printf("UnaryOp: *\n");
 
@@ -110,7 +110,7 @@ static struct Register* get_address(struct Node* node, FILE *fp, int depth) {
 }
 
 static void visit_program(struct Node* node, FILE *fp, int depth) {
-    printf("%s\t", node->type->name);
+    printf("%-32s", node->type->name);
     print_indent(depth);
     printf("Program:\n");
 
@@ -131,11 +131,11 @@ static void visit_program(struct Node* node, FILE *fp, int depth) {
     visit_all(node->Program.function_declarations, fp, depth+1);
 
     // Label address at end of program, heap starts here
-    fprintf(fp, "HEAP_START:\n\n");
+    fprintf(fp, "heap_start:\n\n");
 }
 
 static void visit_var_decl(struct Node* node, FILE *fp, int depth) {
-    printf("%s\t", node->type->name);
+    printf("%-32s", node->type->name);
     print_indent(depth);
     printf("Variable declaration: %s\n", node->VarDecl.symbol->token->value);
     
@@ -144,7 +144,7 @@ static void visit_var_decl(struct Node* node, FILE *fp, int depth) {
     }
 
     struct Symbol* symbol = node->VarDecl.symbol;
-    if (symbol->global) {
+    if (symbol->global && !symbol->is_extern) {
         // TODO this is a nasty hack, space reservations should go at end of file
         fprintf(fp, "\tjmp $+%d+3\n", node->type->size);
         fprintf(fp, "%s:\n", node->token->value);
@@ -154,7 +154,7 @@ static void visit_var_decl(struct Node* node, FILE *fp, int depth) {
 
 // TODO need to preserve registers
 static void visit_func_decl(struct Node* node, FILE *fp, int depth) {
-    printf("%s\t", node->type->name);
+    printf("%-32s", node->type->name);
     print_indent(depth);
     printf("Function declaration: %s %s\n", node->type->name, node->token->value);
 
@@ -168,7 +168,7 @@ static void visit_func_decl(struct Node* node, FILE *fp, int depth) {
 }
 
 static void visit_block(struct Node* node, FILE *fp, int depth) {
-    printf("%s\t", node->type->name);
+    printf("%-32s", node->type->name);
     print_indent(depth);
     printf("Block:\n");
 
@@ -182,7 +182,7 @@ static void visit_block(struct Node* node, FILE *fp, int depth) {
 }
 
 static struct Register* visit_number(struct Node* node, FILE *fp, int depth) {
-    printf("%s\t", node->type->name);
+    printf("%-32s", node->type->name);
     print_indent(depth);
     printf("Number: %s\n", node->token->value);
 
@@ -192,7 +192,7 @@ static struct Register* visit_number(struct Node* node, FILE *fp, int depth) {
 }
 
 static struct Register* visit_string(struct Node* node, FILE *fp, int depth) {
-    printf("%s\t", node->type->name);
+    printf("%-32s", node->type->name);
     print_indent(depth);
     printf("String: %s\n", node->token->value);
 
@@ -214,7 +214,7 @@ static struct Register* visit_string(struct Node* node, FILE *fp, int depth) {
 }
 
 static struct Register* visit_variable(struct Node* node, FILE *fp, int depth) {
-    // printf("%s\t", node->type->name);
+    // printf("%-32s", node->type->name);
     // print_indent(depth);
     // printf("Variable: %s\n", node->token->value);
 
@@ -245,7 +245,7 @@ static struct Register* cast(struct Register* reg, struct Type* from_type, struc
 }
 
 static struct Register* visit_assignment(struct Node* node, FILE *fp, int depth) {
-    printf("%s\t", node->type->name);
+    printf("%-32s", node->type->name);
     print_indent(depth);
     // printf("Assignment: %s\n", node->Assignment.left->token->value);
     printf("Assignment:\n");
@@ -263,7 +263,7 @@ static struct Register* visit_assignment(struct Node* node, FILE *fp, int depth)
 }
 
 static struct Register* visit_bin_op(struct Node* node, FILE *fp, int depth) {
-    printf("%s\t", node->type->name);
+    printf("%-32s", node->type->name);
     print_indent(depth);
     printf("BinOp: %s\n", node->token->value);
 
@@ -446,7 +446,7 @@ static struct Register* visit_bin_op(struct Node* node, FILE *fp, int depth) {
 static struct Register* visit_unary_op(struct Node* node, FILE *fp, int depth) {
     // Perform operation
     if (strcmp(node->token->value, "+") == 0) {
-        printf("%s\t", node->type->name);
+        printf("%-32s", node->type->name);
         print_indent(depth);
         printf("UnaryOp: %s\n", node->token->value);
 
@@ -455,7 +455,7 @@ static struct Register* visit_unary_op(struct Node* node, FILE *fp, int depth) {
 
         return left_reg;
     } else if (strcmp(node->token->value, "-") == 0) {
-        printf("%s\t", node->type->name);
+        printf("%-32s", node->type->name);
         print_indent(depth);
         printf("UnaryOp: %s\n", node->token->value);
 
@@ -490,7 +490,7 @@ static struct Register* visit_unary_op(struct Node* node, FILE *fp, int depth) {
         
         return value_reg;
     } else if (strcmp(node->token->value, "&") == 0) {
-        printf("%s\t", node->type->name);
+        printf("%-32s", node->type->name);
         print_indent(depth);
         printf("UnaryOp: %s\n", node->token->value);
 
@@ -498,7 +498,7 @@ static struct Register* visit_unary_op(struct Node* node, FILE *fp, int depth) {
 
         return pointer_reg;
     } else if (node->token->kind == TK_INC) {
-        printf("%s\t", node->type->name);
+        printf("%-32s", node->type->name);
         print_indent(depth);
         printf("UnaryOp: ++\n");
 
@@ -507,7 +507,7 @@ static struct Register* visit_unary_op(struct Node* node, FILE *fp, int depth) {
 
         return left_reg;
     } else if (node->token->kind == TK_DEC) {
-        printf("%s\t", node->type->name);
+        printf("%-32s", node->type->name);
         print_indent(depth);
         printf("UnaryOp: --\n");
 
@@ -521,7 +521,7 @@ static struct Register* visit_unary_op(struct Node* node, FILE *fp, int depth) {
 }
 
 static void visit_return(struct Node* node, FILE *fp, int depth) {
-    printf("%s\t", node->type->name);
+    printf("%-32s", node->type->name);
     print_indent(depth);
     printf("Return:\n");
 
@@ -544,7 +544,7 @@ static void visit_return(struct Node* node, FILE *fp, int depth) {
 }
 
 static void visit_if(struct Node* node, FILE *fp, int depth) {
-    printf("%s\t", node->type->name);
+    printf("%-32s", node->type->name);
     print_indent(depth);
     printf("If:\n");
 
@@ -590,7 +590,7 @@ static void visit_if(struct Node* node, FILE *fp, int depth) {
 }
 
 static void visit_while(struct Node* node, FILE *fp, int depth) {
-    printf("%s\t", node->type->name);
+    printf("%-32s", node->type->name);
     print_indent(depth);
     printf("While:\n");
 
@@ -638,7 +638,7 @@ static void visit_while(struct Node* node, FILE *fp, int depth) {
 }
 
 static struct Register* visit_func_call(struct Node* node, FILE *fp, int depth) {
-    printf("%s\t", node->type->name);
+    printf("%-32s", node->type->name);
     print_indent(depth);
     printf("Call: %s\n", node->token->value);
 

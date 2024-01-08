@@ -28,3 +28,12 @@ void print_hex_u8(char value) {
     else low = low + '0';
     putc(low);
 }
+
+// temporary hacky implementation because 
+// 16-bit operations don't work yet :(
+void print_hex_u16(int value) {
+    char* p = &value;
+    print_hex_u8(*p);
+    p++;
+    print_hex_u8(*p);
+}

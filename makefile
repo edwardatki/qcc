@@ -9,18 +9,20 @@ test: clean $(addprefix  test_, $(basename $(notdir $(wildcard tests/*.c))))
 	cd tools; ./test_summary.sh
 
 clean:
-	rm -r tests/build
-	rm -r tests/results
+	rm -rf tests/build
+	rm -rf tests/results
 
 # Compiler test
 tests/build/%.asm: tests/%.c qcc
 	mkdir -p tests/build
+	rm -f tests/build/$(notdir $(basename $<)).asm
 	rm -f tests/build/$(notdir $(basename $<)).log
 	cd tests; ../qcc $(notdir $<) -o build/$(notdir $(basename $<)).asm >> build/$(notdir $(basename $<)).log || true
 	cat tests/build/$(notdir $(basename $<)).log
 
 # Assemble test
 tests/build/%.bin: tests/build/%.asm
+	rm -f tests/build/$(notdir $(basename $<)).bin
 	customasm $< tools/architecture.asm -f binary -o tests/build/$(notdir $(basename $<)).bin || true
 
 # Run test

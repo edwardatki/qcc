@@ -35,7 +35,7 @@ static void eat() {
 
 
 static void eat_kind(enum TokenKind kind) {
-    char* messages[] = {"EOF", "'('", "')'", "'{'", "'}'", "','", "'+'", "'-'", "'*'", "'/'", "'='", "a literal", "keyword 'return'", "an identifier", "a type", "';'", "keyword 'if'", "keyword 'else'", "'>'", "'<'", "'>='", "'<='", "'=='", "'!='", "keyword 'while'", "'&'", "'|'", "'<<'", "'>>'", "a string literal", "'++'", "'--'"};
+    char* messages[] = {"EOF", "'('", "')'", "'{'", "'}'", "','", "'+'", "'-'", "'*'", "'/'", "'='", "a literal", "keyword 'return'", "an identifier", "a type", "';'", "keyword 'if'", "keyword 'else'", "'>'", "'<'", "'>='", "'<='", "'=='", "'!='", "keyword 'while'", "'&'", "'|'", "'<<'", "'>>'", "a string literal", "'++'", "'--'", "keyword 'extern'"};
     if (current_token->kind != kind) {
         error(current_token, "expected %s but got %s", messages[kind], messages[current_token->kind]);
     }
@@ -480,14 +480,21 @@ static struct Type* type() {
     return type;
 }
 
-// var_decl : type ID (ASSIGN assignment)
+// var_decl : (EXTERN) type ID (ASSIGN assignment)
 static struct Node* var_decl() {
+    int is_extern = 0;
+    if (peek(TK_EXTERN)) {
+        eat();
+        is_extern = 1;
+    }
+
     struct Type* symbolType = type();
     struct Node* node = new_node(current_token, N_VAR_DECL);
 
     struct Symbol* symbol = calloc(1, sizeof(struct Symbol));
     symbol->type = symbolType;
     symbol->token = current_token;
+    symbol->is_extern = is_extern;
 
     scope_add_symbol(symbol);
 
@@ -516,7 +523,7 @@ static struct Node* block() {
     node->type = &type_void;
     eat_kind(TK_LBRACE);
     while (!peek(TK_RBRACE)) {
-        if (peek(TK_TYPE)) {
+        if (peek(TK_EXTERN) || peek(TK_TYPE)) {
             list_add(&node->Block.statements, var_decl());
             eat_kind(TK_SEMICOLON);
         } else {
@@ -575,19 +582,35 @@ static struct Node* program () {
     struct Node* node = new_node(current_token, N_PROGRAM);
     node->type = &type_void;
     while (!peek(TK_END)) {
-        // TODO this is gross please fix
         struct Token* revert_token = current_token;
-        struct Type* type_node = type();
-        eat(TK_ID);
-        int is_func = peek(TK_LPAREN);
-        current_token = revert_token;
-
-        if (is_func) {
-            list_add(&node->Program.function_declarations, function_decl());
-        } else {
-            list_add(&node->Program.global_variables, var_decl());
-            eat_kind(TK_SEMICOLON);
+        while (!peek(TK_END)) {
+            if (peek(TK_ASSIGN) || peek(TK_SEMICOLON)) {
+                current_token = revert_token;
+                list_add(&node->Program.global_variables, var_decl());
+                eat_kind(TK_SEMICOLON);
+                break;
+            } else if (peek(TK_LPAREN)) {
+                current_token = revert_token;
+                list_add(&node->Program.function_declarations, function_decl());
+                break;
+            } else {
+                eat();
+            }
         }
+
+        // // TODO this is gross please fix
+        // struct Token* revert_token = current_token;
+        // struct Type* type_node = type();
+        // eat(TK_ID);
+        // int is_func = peek(TK_LPAREN);
+        // current_token = revert_token;
+
+        // if (is_func) {
+        //     list_add(&node->Program.function_declarations, function_decl());
+        // } else {
+        //     list_add(&node->Program.global_variables, var_decl());
+        //     eat_kind(TK_SEMICOLON);
+        // }
     }
     return node;
 }
@@ -597,14 +620,6 @@ struct Node* parse(Token* first_token) {
 
     // Global scope
     enter_new_scope();
-
-    // Temporary
-    struct Symbol* symbol = calloc(1, sizeof(struct Symbol));
-    symbol->type = pointer_to(&type_void);
-    symbol->token = new_token(TK_ID);
-    symbol->token->value = "HEAP_START";
-    symbol->token->filename = "n/a";
-    scope_add_symbol(symbol);
 
     struct Node* root_node = program();
     
