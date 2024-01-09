@@ -10,16 +10,27 @@
 #include "symbol.h"
 #include "type.h"
 #include "list.h"
+#include "snippets.h"
 
 int local_stack_usage = 0;
 
-static struct Register registers[] = { {.name="a", .size=1, .free=1, .high_reg=NULL, .low_reg=NULL},
-                                    {.name="b", .size=1, .free=1, .high_reg=NULL, .low_reg=NULL},
-                                    {.name="c", .size=1, .free=1, .high_reg=NULL, .low_reg=NULL},
-                                    {.name="d", .size=1, .free=1, .high_reg=NULL, .low_reg=NULL},
-                                    {.name="e", .size=1, .free=1, .high_reg=NULL, .low_reg=NULL},
-                                    {.name="bc", .size=2, .free=1, .high_reg=&registers[1], .low_reg=&registers[2]},
-                                    {.name="de", .size=2, .free=1, .high_reg=&registers[3], .low_reg=&registers[4]}};
+static struct Register registers[] = { {.name="a", .size=1, .free=1, .parent_reg=NULL, .high_reg=NULL, .low_reg=NULL},
+                                    {.name="b", .size=1, .free=1, .parent_reg=&registers[5], .high_reg=NULL, .low_reg=NULL},
+                                    {.name="c", .size=1, .free=1, .parent_reg=&registers[5], .high_reg=NULL, .low_reg=NULL},
+                                    {.name="d", .size=1, .free=1, .parent_reg=&registers[6], .high_reg=NULL, .low_reg=NULL},
+                                    {.name="e", .size=1, .free=1, .parent_reg=&registers[6], .high_reg=NULL, .low_reg=NULL},
+                                    {.name="bc", .size=2, .free=1, .parent_reg=NULL, .high_reg=&registers[1], .low_reg=&registers[2]},
+                                    {.name="de", .size=2, .free=1, .parent_reg=NULL, .high_reg=&registers[3], .low_reg=&registers[4]}};
+
+void dump_register_usage() {
+    printf("a: %s\n", registers[0].free ? GRN "free" RESET : RED "used" RESET);
+    printf("b: %s\n", registers[1].free ? GRN "free" RESET : RED "used" RESET);
+    printf("c: %s\n", registers[2].free ? GRN "free" RESET : RED "used" RESET);
+    printf("d: %s\n", registers[3].free ? GRN "free" RESET : RED "used" RESET);
+    printf("e: %s\n", registers[4].free ? GRN "free" RESET : RED "used" RESET);
+    printf("bc: %s\n", registers[5].free ? GRN "free" RESET : RED "used" RESET);
+    printf("de: %s\n", registers[6].free ? GRN "free" RESET : RED "used" RESET);
+}
 
 static struct Register* allocate_reg(int size) {
     for (int i = 0; i < sizeof(registers)/sizeof(struct Register); i++) {
@@ -42,13 +53,7 @@ static struct Register* allocate_reg(int size) {
         }
     }
 
-    printf("a: %s\n", registers[0].free ? GRN "free" RESET : RED "used" RESET);
-    printf("b: %s\n", registers[1].free ? GRN "free" RESET : RED "used" RESET);
-    printf("c: %s\n", registers[2].free ? GRN "free" RESET : RED "used" RESET);
-    printf("d: %s\n", registers[3].free ? GRN "free" RESET : RED "used" RESET);
-    printf("e: %s\n", registers[4].free ? GRN "free" RESET : RED "used" RESET);
-    printf("bc: %s\n", registers[5].free ? GRN "free" RESET : RED "used" RESET);
-    printf("de: %s\n", registers[6].free ? GRN "free" RESET : RED "used" RESET);
+    dump_register_usage();
     error(NULL, "unable to allocate register of size %d", size);
 }
 
@@ -61,6 +66,15 @@ static void free_reg(struct Register* reg) {
     // Mark sub registers as free too
     if (reg->high_reg != NULL) reg->high_reg->free = 1;
     if (reg->low_reg != NULL) reg->low_reg->free = 1;
+
+    // printf("FREED REGISTER %s\n", reg->name);
+}
+
+static void free_reg_no_sub(struct Register* reg) {
+    if (reg == NULL) return;
+
+    // Mark register as free
+    reg->free = 1;
 
     // printf("FREED REGISTER %s\n", reg->name);
 }
@@ -229,11 +243,13 @@ static struct Register* visit_variable(struct Node* node, FILE *fp, int depth) {
 }
 
 static struct Register* cast(struct Register* reg, struct Type* from_type, struct Type* to_type, FILE *fp) {
+    if (from_type->kind == to_type->kind) return reg;
+
+    printf("cast from '%s' to '%s'\n", from_type->name, to_type->name);
+    
     struct Register* original_reg = reg;
     free_reg(reg);
     reg = allocate_reg(to_type->size);
-
-    if (from_type->kind == to_type->kind) return reg;
 
     if ((from_type->kind == TY_INT) && (to_type->kind == TY_CHAR)) fprintf(fp, "\tmov %s, %s ; (%s)\n", reg->name, original_reg->high_reg->name, to_type->name);
     else if ((from_type->kind == TY_CHAR) && (to_type->kind == TY_INT)) fprintf(fp, "\tmov %s, 0 ; (%s)\n\tmov %s, %s\n", reg->high_reg->name, to_type->name, reg->low_reg->name, original_reg->name);
@@ -251,7 +267,16 @@ static struct Register* visit_assignment(struct Node* node, FILE *fp, int depth)
     printf("Assignment:\n");
 
     struct Register* value_reg = visit(node->Assignment.right, fp, depth+1);
+
+    fprintf(fp, "\tpush %s\n", value_reg->name);  
+    local_stack_usage += value_reg->size;
+    free_reg(value_reg);
+
     struct Register* pointer_reg = get_address(node->Assignment.left, fp, depth+1);
+
+    value_reg = allocate_reg(value_reg->size);
+    fprintf(fp, "\tpop %s\n", value_reg->name);  
+    local_stack_usage -= value_reg->size;
 
     value_reg = cast(value_reg, node->Assignment.right->type, node->Assignment.left->type, fp);
 
@@ -268,176 +293,284 @@ static struct Register* visit_bin_op(struct Node* node, FILE *fp, int depth) {
     printf("BinOp: %s\n", node->token->value);
 
     struct Register* left_reg = visit(node->BinOp.left, fp, depth+1);
+    left_reg = cast(left_reg, node->BinOp.left->type, node->type, fp);
+    fprintf(fp, "\tpush %s\n", left_reg->name);
+    free_reg(left_reg);
+    local_stack_usage += left_reg->size;
+
     struct Register* right_reg = visit(node->BinOp.right, fp, depth+1);
+    right_reg = cast(right_reg, node->BinOp.right->type, node->type, fp);
+    left_reg = allocate_reg(left_reg->size);
+    fprintf(fp, "\tpop %s\n", left_reg->name);
+    local_stack_usage -= left_reg->size;
 
-    // Can only do 8-bit operations for now
-    if ((left_reg->size > 1) | (right_reg->size > 1)) {
-        error(node->token, "only 8-bit operations supported for now");
+    if (left_reg->size != right_reg->size) error(node->token, "cannot work on registers of different sizes");
+
+    // If right is in accumulator move it, will likely need to put left in accumulator
+    if (strcmp(right_reg->name, "a") == 0) {
+        right_reg = allocate_reg(1);
+        fprintf(fp, "\tmov %s, a\n", right_reg->name);
+        free_reg(&registers[0]);
     }
-
-    // Push accumulator if necessary
-    if ((strcmp(left_reg->name, "a") != 0) && (!registers[0].free)) {
-        fprintf(fp, "\tpush a\n");
-        local_stack_usage += 1;
-    }
-
-    // Move left into accumulator if necessary
-    if (strcmp(left_reg->name, "a") != 0) fprintf(fp, "\tmov a, %s\n", left_reg->name);
 
     // Perform operation
     if (strcmp(node->token->value, "+") == 0) {
-        fprintf(fp, "\tadd %s\n", right_reg->name);
+        static int label_count = 0;
+
+        if (left_reg->size == 1) {
+            add_u8(fp, left_reg, right_reg);
+
+            free_reg(right_reg);
+        } else {
+            add_u8(fp, left_reg->low_reg, right_reg->low_reg);
+
+            fprintf(fp, "\tjnc .add_skip_%d\n", label_count);
+            fprintf(fp, "\tinc %s\n", right_reg->high_reg->name);
+            fprintf(fp, ".add_skip_%d:\n", label_count);
+
+            add_u8(fp, left_reg->high_reg, right_reg->high_reg);
+
+            free_reg(right_reg);
+        }
+
+        label_count++;
     } else if (strcmp(node->token->value, "-") == 0) {
-        fprintf(fp, "\tsub %s\n", right_reg->name);
+        static int label_count = 0;
+
+        if (left_reg->size == 1) {
+            sub_u8(fp, left_reg, right_reg);
+
+            free_reg(right_reg);
+        } else {
+            sub_u8(fp, left_reg->low_reg, right_reg->low_reg);
+
+            fprintf(fp, "\tjc .sub_skip_%d\n", label_count);
+            fprintf(fp, "\tdec %s\n", right_reg->high_reg->name);
+            fprintf(fp, ".sub_skip_%d:\n", label_count);
+            
+            sub_u8(fp, left_reg->high_reg, right_reg->high_reg);
+
+            free_reg(right_reg);
+        }
+
+        label_count++;
     } else if (strcmp(node->token->value, "&") == 0) {
-        fprintf(fp, "\tand %s\n", right_reg->name);
+        if (left_reg->size == 1) {
+            and_u8(fp, left_reg, right_reg);
+
+            free_reg(right_reg);
+        } else {
+            and_u8(fp, left_reg->low_reg, right_reg->low_reg);
+            and_u8(fp, left_reg->high_reg, right_reg->high_reg);
+
+            free_reg(right_reg);
+        }
     } else if (strcmp(node->token->value, "|") == 0) {
-        fprintf(fp, "\tor %s\n", right_reg->name);
+        if (left_reg->size == 1) {
+            or_u8(fp, left_reg, right_reg);
+
+            free_reg(right_reg);
+        } else {
+            or_u8(fp, left_reg->low_reg, right_reg->low_reg);
+            or_u8(fp, left_reg->high_reg, right_reg->high_reg);
+
+            free_reg(right_reg);
+        }
     } else if (strcmp(node->token->value, "<<") == 0) { // TODO this is a rotate instead of shift :(
         static int label_count = 0;
 
-        fprintf(fp, "\tpush a\n");
-        fprintf(fp, "\tmov a, %s\n", right_reg->name);
-        fprintf(fp, "\tand 0b111\n");
-        fprintf(fp, "\tmov %s, a\n", right_reg->name);
-        fprintf(fp, "\tpop a\n");
+        if (left_reg->size == 1) {
+            if (strcmp(left_reg->name, "a") != 0) fprintf(fp, "\tmov a, %s\n", left_reg->name);
 
-        fprintf(fp, ".shl_loop_%d:\n", label_count);
-        fprintf(fp, "\tdec %s\n", right_reg->name);
-        fprintf(fp, "\tjnc .shl_exit_%d\n", label_count);
-        fprintf(fp, "\trol\n");
-        fprintf(fp, "\tjmp .shl_loop_%d\n", label_count);
-        fprintf(fp, ".shl_exit_%d:\n", label_count);
+            fprintf(fp, "\tpush a\n");
+            fprintf(fp, "\tmov a, %s\n", right_reg->name);
+            fprintf(fp, "\tand 0b111\n");
+            fprintf(fp, "\tmov %s, a\n", right_reg->name);
+            fprintf(fp, "\tpop a\n");
+
+            fprintf(fp, ".shl_loop_%d:\n", label_count);
+            fprintf(fp, "\tdec %s\n", right_reg->name);
+            fprintf(fp, "\tjnc .shl_exit_%d\n", label_count);
+            fprintf(fp, "\trol\n");
+            fprintf(fp, "\tjmp .shl_loop_%d\n", label_count);
+            fprintf(fp, ".shl_exit_%d:\n", label_count);
+
+            if (strcmp(left_reg->name, "a") != 0) fprintf(fp, "\tmov %s, a\n", left_reg->name);
+            free_reg(right_reg);
+        } else {
+            error(node->token, "only 8-bit shifts supported for now");
+        }
 
         label_count++;
     } else if (strcmp(node->token->value, ">>") == 0) { // TODO this is a rotate instead of shift :(
         static int label_count = 0;
-        fprintf(fp, "\tpush a\n");
-        fprintf(fp, "\tmov a, 8\n");
-        fprintf(fp, "\tsub %s\n", right_reg->name);
-        fprintf(fp, "\tand 0b111\n");
-        fprintf(fp, "\tmov %s, a\n", right_reg->name);
-        fprintf(fp, "\tpop a\n");
-        
-        fprintf(fp, ".shr_loop_%d:\n", label_count);
-        fprintf(fp, "\tdec %s\n", right_reg->name);
-        fprintf(fp, "\tjnc .shr_exit_%d\n", label_count);
-        fprintf(fp, "\trol\n");
-        fprintf(fp, "\tjmp .shr_loop_%d\n", label_count);
-        fprintf(fp, ".shr_exit_%d:\n", label_count);
-        
+
+        if (left_reg->size == 1) {
+            if (strcmp(left_reg->name, "a") != 0) fprintf(fp, "\tmov a, %s\n", left_reg->name);
+
+            fprintf(fp, "\tpush a\n");
+            fprintf(fp, "\tmov a, 8\n");
+            fprintf(fp, "\tsub %s\n", right_reg->name);
+            fprintf(fp, "\tand 0b111\n");
+            fprintf(fp, "\tmov %s, a\n", right_reg->name);
+            fprintf(fp, "\tpop a\n");
+
+            fprintf(fp, ".shr_loop_%d:\n", label_count);
+            fprintf(fp, "\tdec %s\n", right_reg->name);
+            fprintf(fp, "\tjnc .shr_exit_%d\n", label_count);
+            fprintf(fp, "\trol\n");
+            fprintf(fp, "\tjmp .shr_loop_%d\n", label_count);
+            fprintf(fp, ".shr_exit_%d:\n", label_count);
+
+            if (strcmp(left_reg->name, "a") != 0) fprintf(fp, "\tmov %s, a\n", left_reg->name);
+            free_reg(right_reg);
+        } else {
+            error(node->token, "only 8-bit shifts supported for now");
+        }
+
         label_count++;
     } else if (strcmp(node->token->value, ">") == 0) {
         static int label_count = 0;
-        
-        fprintf(fp, "\tcmp %s\n", right_reg->name);
-        fprintf(fp, "\tjnc .cmp_more_false_%d\n", label_count); // A <= right
 
-        fprintf(fp, ".cmp_more_true_%d:\n", label_count);
-        fprintf(fp, "\tmov a, 1\n");
-        fprintf(fp, "\tjmp .cmp_more_exit_%d\n", label_count);
+        if (left_reg->size == 1) {
+            if (strcmp(left_reg->name, "a") != 0) fprintf(fp, "\tmov a, %s\n", left_reg->name);
 
-        fprintf(fp, ".cmp_more_false_%d:\n", label_count);
-        fprintf(fp, "\tmov a, 0\n");
+            fprintf(fp, "\tcmp %s\n", right_reg->name);
+            fprintf(fp, "\tjnc .cmp_more_false_%d\n", label_count); // A <= right
 
-        fprintf(fp, ".cmp_more_exit_%d:\n", label_count);
+            fprintf(fp, ".cmp_more_true_%d:\n", label_count);
+            fprintf(fp, "\tmov a, 1\n");
+            fprintf(fp, "\tjmp .cmp_more_exit_%d\n", label_count);
+
+            fprintf(fp, ".cmp_more_false_%d:\n", label_count);
+            fprintf(fp, "\tmov a, 0\n");
+
+            fprintf(fp, ".cmp_more_exit_%d:\n", label_count);
+
+            if (strcmp(left_reg->name, "a") != 0) fprintf(fp, "\tmov %s, a\n", left_reg->name);
+            free_reg(right_reg);
+        } else {
+            error(node->token, "only 8-bit comparisons supported for now");
+        }
 
         label_count++;
     } else if (strcmp(node->token->value, "<") == 0) {
         static int label_count = 0;
-        
-        fprintf(fp, "\tcmp %s\n", right_reg->name);
-        fprintf(fp, "\tjc .cmp_less_false_%d\n", label_count);  // A > right
-        fprintf(fp, "\tje .cmp_less_false_%d\n", label_count);  // A == right
 
-        fprintf(fp, ".cmp_less_true_%d:\n", label_count);
-        fprintf(fp, "\tmov a, 1\n");
-        fprintf(fp, "\tjmp .cmp_less_exit_%d\n", label_count);
+        if (left_reg->size == 1) {
+            if (strcmp(left_reg->name, "a") != 0) fprintf(fp, "\tmov a, %s\n", left_reg->name);
 
-        fprintf(fp, ".cmp_less_false_%d:\n", label_count);
-        fprintf(fp, "\tmov a, 0\n");
+            fprintf(fp, "\tcmp %s\n", right_reg->name);
+            fprintf(fp, "\tjc .cmp_less_false_%d\n", label_count);  // A > right
+            fprintf(fp, "\tje .cmp_less_false_%d\n", label_count);  // A == right
 
-        fprintf(fp, ".cmp_less_exit_%d:\n", label_count);
+            fprintf(fp, ".cmp_less_true_%d:\n", label_count);
+            fprintf(fp, "\tmov a, 1\n");
+            fprintf(fp, "\tjmp .cmp_less_exit_%d\n", label_count);
+
+            fprintf(fp, ".cmp_less_false_%d:\n", label_count);
+            fprintf(fp, "\tmov a, 0\n");
+
+            fprintf(fp, ".cmp_less_exit_%d:\n", label_count);
+
+            if (strcmp(left_reg->name, "a") != 0) fprintf(fp, "\tmov %s, a\n", left_reg->name);
+            free_reg(right_reg);
+        } else {
+            error(node->token, "only 8-bit comparisons supported for now");
+        }
 
         label_count++;
     } else if (strcmp(node->token->value, ">=") == 0) {
         static int label_count = 0;
-        
-        fprintf(fp, "\tcmp %s\n", right_reg->name);
-        fprintf(fp, "\tje .cmp_more_equal_true_%d\n", label_count); // A == right
-        fprintf(fp, "\tjnc .cmp_more_equal_false_%d\n", label_count); // A <= right
 
-        fprintf(fp, ".cmp_more_equal_true_%d:\n", label_count);
-        fprintf(fp, "\tmov a, 1\n");
-        fprintf(fp, "\tjmp .cmp_more_equal_exit_%d\n", label_count);
+        if (left_reg->size == 1) {
+            if (strcmp(left_reg->name, "a") != 0) fprintf(fp, "\tmov a, %s\n", left_reg->name);
 
-        fprintf(fp, ".cmp_more_equal_false_%d:\n", label_count);
-        fprintf(fp, "\tmov a, 0\n");
+            fprintf(fp, "\tcmp %s\n", right_reg->name);
+            fprintf(fp, "\tje .cmp_more_equal_true_%d\n", label_count); // A == right
+            fprintf(fp, "\tjnc .cmp_more_equal_false_%d\n", label_count); // A <= right
 
-        fprintf(fp, ".cmp_more_equal_exit_%d:\n", label_count);
+            fprintf(fp, ".cmp_more_equal_true_%d:\n", label_count);
+            fprintf(fp, "\tmov a, 1\n");
+            fprintf(fp, "\tjmp .cmp_more_equal_exit_%d\n", label_count);
+
+            fprintf(fp, ".cmp_more_equal_false_%d:\n", label_count);
+            fprintf(fp, "\tmov a, 0\n");
+
+            fprintf(fp, ".cmp_more_equal_exit_%d:\n", label_count);
+
+            if (strcmp(left_reg->name, "a") != 0) fprintf(fp, "\tmov %s, a\n", left_reg->name);
+            free_reg(right_reg);
+        } else {
+            error(node->token, "only 8-bit comparisons supported for now");
+        }
 
         label_count++;
     } else if (strcmp(node->token->value, "<=") == 0) {
         static int label_count = 0;
-        
-        fprintf(fp, "\tcmp %s\n", right_reg->name);
-        fprintf(fp, "\tjc .cmp_less_equal_false_%d\n", label_count); // A > right
 
-        fprintf(fp, ".cmp_less_equal_true_%d:\n", label_count);
-        fprintf(fp, "\tmov a, 1\n");
-        fprintf(fp, "\tjmp .cmp_less_equal_exit_%d\n", label_count);
+        if (left_reg->size == 1) {
+            if (strcmp(left_reg->name, "a") != 0) fprintf(fp, "\tmov a, %s\n", left_reg->name);
 
-        fprintf(fp, ".cmp_less_equal_false_%d:\n", label_count);
-        fprintf(fp, "\tmov a, 0\n");
+            fprintf(fp, "\tcmp %s\n", right_reg->name);
+            fprintf(fp, "\tjc .cmp_less_equal_false_%d\n", label_count); // A > right
 
-        fprintf(fp, ".cmp_less_equal_exit_%d:\n", label_count);
+            fprintf(fp, ".cmp_less_equal_true_%d:\n", label_count);
+            fprintf(fp, "\tmov a, 1\n");
+            fprintf(fp, "\tjmp .cmp_less_equal_exit_%d\n", label_count);
+
+            fprintf(fp, ".cmp_less_equal_false_%d:\n", label_count);
+            fprintf(fp, "\tmov a, 0\n");
+
+            fprintf(fp, ".cmp_less_equal_exit_%d:\n", label_count);
+
+            if (strcmp(left_reg->name, "a") != 0) fprintf(fp, "\tmov %s, a\n", left_reg->name);
+            free_reg(right_reg);
+        } else {
+            error(node->token, "only 8-bit comparisons supported for now");
+        }
 
         label_count++;
     } else if (strcmp(node->token->value, "==") == 0) {
         static int label_count = 0;
-        
-        fprintf(fp, "\tcmp %s\n", right_reg->name);
-        fprintf(fp, "\tjne .cmp_equal_false_%d\n", label_count); // A != right
 
-        fprintf(fp, ".cmp_equal_true_%d:\n", label_count);
-        fprintf(fp, "\tmov a, 1\n");
-        fprintf(fp, "\tjmp .cmp_equal_exit_%d\n", label_count);
+        if (left_reg->size == 1) {
+            equal_u8(fp, left_reg, right_reg);
+            free_reg(right_reg);
+        } else {
+            equal_u8(fp, left_reg->low_reg, right_reg->low_reg);
+            equal_u8(fp, left_reg->high_reg, right_reg->high_reg);
+            free_reg(right_reg);
 
-        fprintf(fp, ".cmp_equal_false_%d:\n", label_count);
-        fprintf(fp, "\tmov a, 0\n");
-
-        fprintf(fp, ".cmp_equal_exit_%d:\n", label_count);
+            and_u8(fp, left_reg->high_reg, left_reg->low_reg);
+            free_reg_no_sub(left_reg->low_reg);
+            free_reg_no_sub(left_reg);
+            left_reg = left_reg->high_reg;
+        }
 
         label_count++;
     } else if (strcmp(node->token->value, "!=") == 0) {
         static int label_count = 0;
-        
-        fprintf(fp, "\tcmp %s\n", right_reg->name);
-        fprintf(fp, "\tje .cmp_not_equal_false_%d\n", label_count); // A != right
 
-        fprintf(fp, ".cmp_not_equal_true_%d:\n", label_count);
-        fprintf(fp, "\tmov a, 1\n");
-        fprintf(fp, "\tjmp .cmp_not_equal_exit_%d\n", label_count);
+        if (left_reg->size == 1) {
+            equal_u8(fp, left_reg, right_reg);
+            zero_u8(fp, left_reg);
+            free_reg(right_reg);
+        } else {
+            equal_u8(fp, left_reg->low_reg, right_reg->low_reg);
+            equal_u8(fp, left_reg->high_reg, right_reg->high_reg);
+            free_reg(right_reg);
 
-        fprintf(fp, ".cmp_not_equal_false_%d:\n", label_count);
-        fprintf(fp, "\tmov a, 0\n");
-
-        fprintf(fp, ".cmp_not_equal_exit_%d:\n", label_count);
+            and_u8(fp, left_reg->high_reg, left_reg->low_reg);
+            free_reg_no_sub(left_reg->low_reg);
+            free_reg_no_sub(left_reg);
+            zero_u8(fp, left_reg->high_reg);
+            left_reg = left_reg->high_reg;  
+        }
 
         label_count++;
     } else {
         fprintf(fp, "\t???\n");
-    }
-    
-    free_reg(right_reg);
-
-    // Move result from accumulator back to left if necessary
-    if (strcmp(left_reg->name, "a") != 0) fprintf(fp, "\tmov %s, a\n", left_reg->name);
-
-    // Restore accumulator if necessary
-    if ((strcmp(left_reg->name, "a") != 0) && (!registers[0].free)) {
-        fprintf(fp, "\tpop a\n");
-        local_stack_usage -= 1;
     }
 
     return left_reg;
@@ -451,6 +584,7 @@ static struct Register* visit_unary_op(struct Node* node, FILE *fp, int depth) {
         printf("UnaryOp: %s\n", node->token->value);
 
         // Don't need to do anything here
+        
         struct Register* left_reg = visit(node->UnaryOp.left, fp, depth+1);
 
         return left_reg;

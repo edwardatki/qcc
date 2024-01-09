@@ -6,6 +6,7 @@ struct Register {
     int size;
     int free;
     
+    struct Register* parent_reg;
     struct Register* high_reg;
     struct Register* low_reg;
 };

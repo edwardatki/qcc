@@ -17,7 +17,7 @@ tests/build/%.asm: tests/%.c qcc
 	mkdir -p tests/build
 	rm -f tests/build/$(notdir $(basename $<)).asm
 	rm -f tests/build/$(notdir $(basename $<)).log
-	cd tests; ../qcc $(notdir $<) -o build/$(notdir $(basename $<)).asm >> build/$(notdir $(basename $<)).log || true
+	cd tests; ../qcc $(notdir $<) -o build/$(notdir $(basename $<)).asm >> build/$(notdir $(basename $<)).log || rm -f build/$(notdir $(basename $<)).asm || true
 	cat tests/build/$(notdir $(basename $<)).log
 
 # Assemble test

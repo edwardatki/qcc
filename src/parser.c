@@ -382,7 +382,8 @@ static struct Node* assignment () {
         } else if ((node->type->kind == TY_INT) && (node->Assignment.right->type->kind == TY_POINTER)) {
             warning(node->token, "assignment to '%s' from '%s' makes integer from pointer without a cast", node->type->name, node->Assignment.right->type->name);
         } else if (get_common_type(node->token, node->type, node->Assignment.right->type)->kind != node->type->kind) {
-            error(node->token, "cannot assign '%s' to '%s'", node->Assignment.right->type->name, node->type->name);
+            // error(node->token, "cannot assign '%s' to '%s'", node->Assignment.right->type->name, node->type->name);
+            warning(node->token, "assignment makes '%s' from '%s' without a cast", node->type->name, node->Assignment.right->type->name);
         }
     }
 
@@ -597,20 +598,6 @@ static struct Node* program () {
                 eat();
             }
         }
-
-        // // TODO this is gross please fix
-        // struct Token* revert_token = current_token;
-        // struct Type* type_node = type();
-        // eat(TK_ID);
-        // int is_func = peek(TK_LPAREN);
-        // current_token = revert_token;
-
-        // if (is_func) {
-        //     list_add(&node->Program.function_declarations, function_decl());
-        // } else {
-        //     list_add(&node->Program.global_variables, var_decl());
-        //     eat_kind(TK_SEMICOLON);
-        // }
     }
     return node;
 }
