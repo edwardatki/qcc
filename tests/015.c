@@ -1,19 +1,23 @@
 // Test 16 bit operations
 
-#include "io.h"
+// #include "io.h"
 
 char main() {
-    int x = 1234;
-    int y = 4321;
-    int z = 1111;
+    int x = 0x1234;
+    int y = 0x4321;
+    int z = 0x1111;
 
     x = x + y - z;
 
-    print_hex_u16(x);
-    print("\n");
+    // print_hex_u16(x);
+    // print("\n");
 
-    if (x != 4444) return 1;
-    if (x == 4444) return 0;
+    if (x != 0x4444) return 1;
+    // if (x > 0x4444) return 2;
+    // if (x < 0x4444) return 3;
+    // if (x >= 4445) return 4;
+    // if (x <= 0x4444) return 5;
+    if (x == 0x4444) return 0;
 
-    return 2;
+    return 6;
 }

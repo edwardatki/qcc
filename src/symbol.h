@@ -4,8 +4,6 @@
 struct Token;
 struct Type;
 
-// typedef struct Symbol Symbol;
-
 struct Symbol {
     struct Token* token;
     struct Type* type;

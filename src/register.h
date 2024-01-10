@@ -11,4 +11,11 @@ struct Register {
     struct Register* low_reg;
 };
 
+extern struct Register registers[];
+
+void dump_register_usage();
+struct Register* allocate_reg(int);
+void free_reg(struct Register*);
+void free_reg_no_sub(struct Register*);
+
 #endif
