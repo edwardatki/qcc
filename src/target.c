@@ -4,19 +4,118 @@
 #include "register.h"
 #include "messages.h"
 
+void emit_label(FILE* fp, char* label, int count) {
+    if (count < 0) fprintf(fp, "%s:\n", label);
+    else fprintf(fp, "%s_%d:\n", label, count);
+}
+
 void emit_move(FILE* fp, struct Register* left_reg, struct Register* right_reg) {
-    fprintf(fp, "\tmove %s, %s\n", left_reg->name, right_reg->name);
+    fprintf(fp, "\tmov %s, %s\n", left_reg->name, right_reg->name);
 }
 
 void emit_push(FILE* fp, struct Register* left_reg) {
     fprintf(fp, "\tpush %s\n", left_reg->name);
-    free_reg(left_reg);
+    // free_reg(left_reg);
 }
 
 void emit_pop(FILE* fp, struct Register* left_reg) {
     fprintf(fp, "\tpop %s\n", left_reg->name);
-    registers[0].free = 0;
+    // registers[0].free = 0;
 }
+
+void emit_stack_reserve(FILE* fp, unsigned int size) {
+    fprintf(fp, "\tmov sp, sp-%d\n", size);
+}
+
+void emit_stack_free(FILE* fp, unsigned int size) {
+    fprintf(fp, "\tmov sp, sp+%d\n", size);
+}
+
+void emit_immediate_load(FILE* fp, struct Register* reg, char* value) {
+    fprintf(fp, "\tmov %s, %s\n", reg->name, value);
+};
+
+void emit_indirect_load(FILE* fp, struct Register* left_reg, struct Register* right_reg) {
+    if (right_reg->size != 2) error(NULL, "indirect load must be a 16-bit register");
+    fprintf(fp, "\tmov %s, [%s]\n", left_reg->name, right_reg->name);
+}
+
+void emit_indirect_store(FILE* fp, struct Register* left_reg, struct Register* right_reg) {
+    if (left_reg->size != 2) error(NULL, "indirect store must be a 16-bit register");
+    fprintf(fp, "\tmov [%s], %s\n", left_reg->name, right_reg->name);
+}
+
+void emit_call(FILE* fp, char* label, int count) {
+    if (count < 0) fprintf(fp, "\tcall %s\n", label);
+    else fprintf(fp, "\tcall %s_%d\n", label, count);
+}
+
+void emit_jump(FILE* fp, char* label, int count) {
+    if (count < 0) fprintf(fp, "\tjmp %s\n", label);
+    else fprintf(fp, "\tjmp %s_%d\n", label, count);
+}
+
+void emit_jump_if_equal(FILE* fp, char* label, int count) {
+    if (count < 0) fprintf(fp, "\tje %s\n", label);
+    else fprintf(fp, "\tje %s_%d\n", label, count);
+}
+
+void emit_jump_if_not_equal(FILE* fp, char* label, int count) {
+    if (count < 0) fprintf(fp, "\tjne %s\n", label);
+    else fprintf(fp, "\tjne %s_%d\n", label, count);
+}
+
+void emit_jump_if_carry(FILE* fp, char* label, int count) {
+    if (count < 0) fprintf(fp, "\tjc %s\n", label);
+    else fprintf(fp, "\tjc %s_%d\n", label, count);
+}
+
+void emit_jump_if_not_carry(FILE* fp, char* label, int count) {
+    if (count < 0) fprintf(fp, "\tjnc %s\n", label);
+    else fprintf(fp, "\tjnc %s_%d\n", label, count);
+}
+
+void emit_return(FILE* fp) {
+    fprintf(fp, "\tret\n");
+}
+
+void emit_cmp_zero(FILE* fp) {
+    fprintf(fp, "\tcmp 0\n");
+};
+
+void emit_add_immediate(FILE* fp, struct Register* left_reg, int value) {
+    if (value == 1) {
+        fprintf(fp, "\tinc %s\n", left_reg->name);
+    } else {
+        // Preserve accumulator if necessary
+        if ((strcmp(left_reg->name, "a") != 0) && (!registers[0].free)) emit_push(fp, &registers[REG_A]);
+        
+        // Move to accumulator if necessary
+        if (strcmp(left_reg->name, "a") != 0) emit_move(fp, &registers[REG_A], left_reg);
+
+        fprintf(fp, "\tadd %d\n", value);
+
+        // Restore accumulator if necessary
+        if ((strcmp(left_reg->name, "a") != 0) && (!registers[0].free)) emit_pop(fp, &registers[REG_A]);
+    }
+};
+
+void emit_sub_immediate(FILE* fp, struct Register* left_reg, int value) {
+    if (value == 1) {
+        fprintf(fp, "\tdec %s\n", left_reg->name);
+    } else {
+        // Preserve accumulator if necessary
+        if ((strcmp(left_reg->name, "a") != 0) && (!registers[0].free)) emit_push(fp, &registers[REG_A]);
+        
+        // Move to accumulator if necessary
+        if (strcmp(left_reg->name, "a") != 0) emit_move(fp, &registers[REG_A], left_reg);
+
+        fprintf(fp, "\tsub %d\n", value);
+
+        // Restore accumulator if necessary
+        if ((strcmp(left_reg->name, "a") != 0) && (!registers[0].free)) emit_pop(fp, &registers[REG_A]);
+    }
+};
 
 static struct Register* add_u8(FILE* fp, struct Register* left_reg, struct Register* right_reg) {
     if (strcmp(left_reg->name, "a") != 0) fprintf(fp, "\tmov a, %s\n", left_reg->name);
@@ -95,19 +194,6 @@ struct Register* emit_or(FILE* fp, struct Register* left_reg, struct Register* r
     if (left_reg->size == 1) return or_u8(fp, left_reg, right_reg);
     else return or_u16(fp, left_reg, right_reg);
 }
-
-// static struct Register* cmp_u8(FILE* fp, struct Register* left_reg, struct Register* right_reg) {
-//     if (strcmp(left_reg->name, "a") != 0) fprintf(fp, "\tmov a, %s\n", left_reg->name);
-//     fprintf(fp, "\tcmp %s\n", right_reg->name);
-//     if (strcmp(left_reg->name, "a") != 0) fprintf(fp, "\tmov %s, a\n", left_reg->name);
-//     free_reg(right_reg);
-//     return left_reg;
-// }
-
-// struct Register* emit_cmp(FILE* fp, struct Register* left_reg, struct Register* right_reg) {
-//     if (left_reg->size == 1) return cmp_u8(fp, left_reg, right_reg);
-//     else error(NULL, "emit cmp_u16 not implemented");
-// }
 
 static struct Register* is_zero_u8(FILE* fp, struct Register* left_reg) {
     if (strcmp(left_reg->name, "a") != 0) fprintf(fp, "\tmov a, %s\n", left_reg->name);

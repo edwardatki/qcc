@@ -170,7 +170,7 @@ static struct Register* visit_variable(struct Node* node, FILE *fp, int depth) {
     struct Register* pointer_reg = get_address(node, fp, depth);
     struct Register* value_reg = allocate_reg(node->type->size);
 
-    fprintf(fp, "\tmov %s, [%s]\n", value_reg->name, pointer_reg->name);
+    emit_indirect_load(fp, value_reg, pointer_reg);
 
     free_reg(pointer_reg);
 
@@ -203,19 +203,19 @@ static struct Register* visit_assignment(struct Node* node, FILE *fp, int depth)
 
     struct Register* value_reg = visit(node->Assignment.right, fp, depth+1);
 
-    fprintf(fp, "\tpush %s\n", value_reg->name);  
+    emit_push(fp, value_reg);
     local_stack_usage += value_reg->size;
     free_reg(value_reg);
 
     struct Register* pointer_reg = get_address(node->Assignment.left, fp, depth+1);
 
     value_reg = allocate_reg(value_reg->size);
-    fprintf(fp, "\tpop %s\n", value_reg->name);  
+    emit_pop(fp, value_reg);
     local_stack_usage -= value_reg->size;
 
     value_reg = cast(value_reg, node->Assignment.right->type, node->Assignment.left->type, fp);
 
-    fprintf(fp, "\tmov [%s], %s\n", pointer_reg->name, value_reg->name);  
+    emit_indirect_store(fp, pointer_reg, value_reg);
     
     free_reg(pointer_reg);
 
@@ -229,14 +229,14 @@ static struct Register* visit_bin_op(struct Node* node, FILE *fp, int depth) {
 
     struct Register* left_reg = visit(node->BinOp.left, fp, depth+1);
     left_reg = cast(left_reg, node->BinOp.left->type, node->type, fp);
-    fprintf(fp, "\tpush %s\n", left_reg->name);
+    emit_push(fp, left_reg);
     free_reg(left_reg);
     local_stack_usage += left_reg->size;
 
     struct Register* right_reg = visit(node->BinOp.right, fp, depth+1);
     right_reg = cast(right_reg, node->BinOp.right->type, node->type, fp);
     left_reg = allocate_reg(left_reg->size);
-    fprintf(fp, "\tpop %s\n", left_reg->name);
+    emit_pop(fp, left_reg);
     local_stack_usage -= left_reg->size;
 
     if (left_reg->size != right_reg->size) error(node->token, "cannot work on registers of different sizes");
@@ -244,8 +244,8 @@ static struct Register* visit_bin_op(struct Node* node, FILE *fp, int depth) {
     // If right is in accumulator move it, will likely need to put left in accumulator
     if (strcmp(right_reg->name, "a") == 0) {
         right_reg = allocate_reg(1);
-        fprintf(fp, "\tmov %s, a\n", right_reg->name);
-        free_reg(&registers[0]);
+        emit_move(fp, right_reg, &registers[REG_A]);
+        free_reg(&registers[REG_A]);
     }
 
     // Perform operation
@@ -267,81 +267,54 @@ static struct Register* visit_bin_op(struct Node* node, FILE *fp, int depth) {
 }
 
 static struct Register* visit_unary_op(struct Node* node, FILE *fp, int depth) {
+    struct Register* left_reg;
+
     // Perform operation
     if (strcmp(node->token->value, "+") == 0) {
         printf("%-32s", node->type->name);
         print_indent(depth);
         printf("UnaryOp: %s\n", node->token->value);
-
-        // Don't need to do anything here
         
-        struct Register* left_reg = visit(node->UnaryOp.left, fp, depth+1);
-
-        return left_reg;
+        left_reg = visit(node->UnaryOp.left, fp, depth+1);
     } else if (strcmp(node->token->value, "-") == 0) {
         printf("%-32s", node->type->name);
         print_indent(depth);
         printf("UnaryOp: %s\n", node->token->value);
 
-        struct Register* left_reg = visit(node->UnaryOp.left, fp, depth+1);
-
-        // Can only do 8-bit operations for now
-        if (left_reg->size > 1) {
-            error(node->token, "only 8-bit operations supported for now");
-        }
-
-        // Move left out of accumulator if necessary
-        if (strcmp(left_reg->name, "a") == 0) {
-            left_reg = allocate_reg(1);
-            fprintf(fp, "\tmov %s, a\n", left_reg->name);
-            fprintf(fp, "\tmov a, 0\n");
-            fprintf(fp, "\tsub %s\n", left_reg->name);
-            fprintf(fp, "\tmov a, %s\n", left_reg->name);
-            free_reg(left_reg);
-            left_reg = &registers[0];
-        } else {
-            fprintf(fp, "\tmov a, 0\n");
-            fprintf(fp, "\tsub %s\n", left_reg->name);
-        }
-
-        return left_reg;
+        struct Register* right_reg = visit(node->UnaryOp.left, fp, depth+1);
+        left_reg = allocate_reg(right_reg->size);
+        emit_immediate_load(fp, left_reg, "0");
+        left_reg = emit_sub(fp, left_reg, right_reg);
     } else if (strcmp(node->token->value, "*") == 0) {
         struct Register* pointer_reg = get_address(node, fp, depth);
         free_reg(pointer_reg);
-        struct Register* value_reg = allocate_reg(node->UnaryOp.left->Variable.symbol->type->base->size);
-
-        fprintf(fp, "\tmov %s, [%s]\n", value_reg->name, pointer_reg->name);
-        
-        return value_reg;
+        left_reg = allocate_reg(node->UnaryOp.left->Variable.symbol->type->base->size);
+        emit_indirect_load(fp, left_reg, pointer_reg);
     } else if (strcmp(node->token->value, "&") == 0) {
         printf("%-32s", node->type->name);
         print_indent(depth);
         printf("UnaryOp: %s\n", node->token->value);
 
-        struct Register* pointer_reg = get_address(node->UnaryOp.left, fp, depth+1);
-
-        return pointer_reg;
+        left_reg = get_address(node->UnaryOp.left, fp, depth+1);
     } else if (node->token->kind == TK_INC) {
         printf("%-32s", node->type->name);
         print_indent(depth);
         printf("UnaryOp: ++\n");
 
-        struct Register* left_reg = visit(node->UnaryOp.left, fp, depth+1);
-        fprintf(fp, "\tinc %s\n", left_reg->name);
-
-        return left_reg;
+        left_reg = visit(node->UnaryOp.left, fp, depth+1);
+        emit_add_immediate(fp, left_reg, 1);
     } else if (node->token->kind == TK_DEC) {
         printf("%-32s", node->type->name);
         print_indent(depth);
         printf("UnaryOp: --\n");
 
-        struct Register* left_reg = visit(node->UnaryOp.left, fp, depth+1);
-        fprintf(fp, "\tdec %s\n", left_reg->name);
-
-        return left_reg;
+        left_reg = visit(node->UnaryOp.left, fp, depth+1);
+        emit_sub_immediate(fp, left_reg, 1);
     } else {
         error(node->token, "invalid unary operator");
     }
+
+    return left_reg;
 }
 
 static void visit_return(struct Node* node, FILE *fp, int depth) {
@@ -357,13 +330,13 @@ static void visit_return(struct Node* node, FILE *fp, int depth) {
     if (reg->size > 1) error(node->token, "only 8-bit return supported for now");
 
     // Move return value to accumulator if necessary
-    if (strcmp(reg->name, "a") != 0) fprintf(fp, "\tmov a, %s\n", reg->name);
+    if (strcmp(reg->name, "a") != 0) emit_move(fp, &registers[REG_A], reg);
 
     // TODO this needs account for returns from inside futher scopes
     // Restore stack
-    if (node->scope->stack_size != 0) fprintf(fp, "\tmov sp, sp+%d\n", node->scope->stack_size);
+    if (node->scope->stack_size != 0) emit_stack_free(fp, node->scope->stack_size);
 
-    fprintf(fp, "\tret\n");
+    emit_return(fp);
     free_reg(reg);
 }
 
@@ -381,36 +354,36 @@ static void visit_if(struct Node* node, FILE *fp, int depth) {
 
     // Push accumulator if necessary
     if ((strcmp(reg->name, "a") != 0) && (!registers[0].free)) {
-        fprintf(fp, "\tpush a\n");
+        emit_push(fp, &registers[REG_A]);
         local_stack_usage += 1;
     }
 
     // Move test value to accumulator if necessary
-    if (strcmp(reg->name, "a") != 0) fprintf(fp, "\tmov a, %s\n", reg->name);
+    if (strcmp(reg->name, "a") != 0) emit_move(fp, &registers[REG_A], reg);
 
     // Compare
-    fprintf(fp, "\tcmp 0\n");
+    emit_cmp_zero(fp);
 
     // Restore accumulator if necessary
     if ((strcmp(reg->name, "a") != 0) && (!registers[0].free)) {
-        fprintf(fp, "\tpop a\n");
+        emit_pop(fp, &registers[REG_A]);
         local_stack_usage -= 1;
     }
 
     // Jump if equal 0
-    fprintf(fp, "\tje .if_false_%d\n", tmp_label_count);
+    emit_jump_if_equal(fp, ".if_false", tmp_label_count);
     free_reg(reg);
 
     // Visit true branch
-    fprintf(fp, ".if_true_%d:\n", tmp_label_count);
+    emit_label(fp, ".if_true", tmp_label_count);
     free_reg(visit(node->If.true_statement, fp, depth+1));
-    fprintf(fp, "\tjmp .if_exit_%d\n", tmp_label_count);
+    emit_jump(fp, ".if_exit", tmp_label_count);
 
     // Visit false branch
-    fprintf(fp, ".if_false_%d:\n", tmp_label_count);
+    emit_label(fp, ".if_false", tmp_label_count);
     if (node->If.false_statement != NULL) free_reg(visit(node->If.false_statement, fp, depth+1));
 
-    fprintf(fp, ".if_exit_%d:\n", tmp_label_count);
+    emit_label(fp, ".if_exit", tmp_label_count);
 }
 
 static void visit_while(struct Node* node, FILE *fp, int depth) {
@@ -422,41 +395,41 @@ static void visit_while(struct Node* node, FILE *fp, int depth) {
     int tmp_label_count = label_count;
     label_count++;
 
-    fprintf(fp, ".while_start_%d:\n", tmp_label_count);
+    emit_label(fp, ".while_start", tmp_label_count);
 
     // Get test value
     struct Register* reg = visit(node->Return.expr, fp, depth+1);
 
     // Push accumulator if necessary
     if ((strcmp(reg->name, "a") != 0) && (!registers[0].free)) {
-        fprintf(fp, "\tpush a\n");
+        emit_push(fp, &registers[REG_A]);
         local_stack_usage += 1;
     }
 
     // Move test value to accumulator if necessary
-    if (strcmp(reg->name, "a") != 0) fprintf(fp, "\tmov a, %s\n", reg->name);
+    if (strcmp(reg->name, "a") != 0) emit_move(fp, &registers[REG_A], reg);
 
     // Compare
-    fprintf(fp, "\tcmp 0\n");
+    emit_cmp_zero(fp);
 
     // Restore accumulator if necessary
     if ((strcmp(reg->name, "a") != 0) && (!registers[0].free)) {
-        fprintf(fp, "\tpop a\n");
+        emit_pop(fp, &registers[REG_A]);
         local_stack_usage -= 1;
     }
 
     // Jump if equal 0
-    fprintf(fp, "\tje .while_exit_%d\n", tmp_label_count);
+    emit_jump_if_equal(fp, ".while_exit", tmp_label_count);
     free_reg(reg);
 
     // Visit loop statement
-    fprintf(fp, ".while_contents_%d:\n", tmp_label_count);
+    emit_label(fp, ".while_contents", tmp_label_count);
     free_reg(visit(node->While.loop_statement, fp, depth+1));
 
     // Go back to start of loop
-    fprintf(fp, "\tjmp .while_start_%d\n", tmp_label_count);
+    emit_jump(fp, ".while_start", tmp_label_count);
 
-    fprintf(fp, ".while_exit_%d:\n", tmp_label_count);
+    emit_label(fp, ".while_exit", tmp_label_count);
 
     tmp_label_count++;
 }
@@ -490,8 +463,8 @@ static struct Register* visit_func_call(struct Node* node, FILE *fp, int depth) 
         } while (list_next(&current_entry));
     }
     
-    fprintf(fp, "\tcall %s\n", node->token->value);
-    fprintf(fp, "\tmov sp, sp+%d\n", func_stack_usage);
+    emit_call(fp, node->token->value, -1);
+    emit_stack_free(fp, func_stack_usage);
 
     // Move result out of accumulator if necessary
     struct Register* result_reg = allocate_reg(1);
